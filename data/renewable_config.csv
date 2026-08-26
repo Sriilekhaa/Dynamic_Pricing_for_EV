@@ -1,0 +1,5 @@
+network_name,panel_area_m2,panel_efficiency,n_turbines,rotor_radius_m,air_density_kg_m3,wind_cp,v_cut_in_mps,v_rated_mps,v_cut_out_mps
+residential,800,0.18,5,1.8,1.225,0.35,1.5,9.0,20.0
+commercial,600,0.18,10,2.0,1.225,0.35,1.5,9.0,20.0
+industrial,1800,0.18,30,2.5,1.225,0.35,1.5,9.0,20.0
+institutional,900,0.18,12,2.0,1.225,0.35,1.5,9.0,20.0

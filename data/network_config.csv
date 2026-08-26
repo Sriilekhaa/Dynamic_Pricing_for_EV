@@ -1,0 +1,5 @@
+network_name,max_capacity_W,ev_mu,ev_sigma,data_source
+residential,1166666,350000,17000,real
+commercial,1000000,350000,17000,real
+industrial,1500000,350000,17000,synthetic
+institutional,800000,350000,17000,synthetic

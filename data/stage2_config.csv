@@ -1,0 +1,5 @@
+network_name,mu_ev_capacity_W,alpha_default,ev_unbalanced_max_W,ev_pvb_full_max_W
+residential,188423.0,0.15,376846.0,205699.89945126383
+commercial,170445.5,0.15,340891.0,188613.68714168054
+industrial,144222.0,0.15,288444.0,159578.30936341957
+institutional,109222.0,0.15,218444.0,121807.68366976597
