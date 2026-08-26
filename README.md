@@ -8,7 +8,7 @@
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 1. [Executive Summary](#-executive-summary)
 2. [Problem Statement & Background](#-problem-statement--background)
 3. [Literature Review & Research Gaps](#-literature-review--research-gaps)
@@ -29,7 +29,7 @@
 
 ---
 
-## 🔭 Executive Summary
+## Executive Summary
 
 The exponential adoption of Electric Vehicles (EVs) introduces substantial localized power surges, transformer overloading, and phase imbalances across urban distribution grids. Traditional flat or time-of-use (TOU) tariffs fail to prevent synchronized peak-hour charging. While recent Deep Reinforcement Learning (DRL) frameworks propose dynamic pricing to shift EV charging to off-peak periods, state-of-the-art literature has remained bottlenecked by three major unaddressed gaps:
 1. **Dyadic Network Restriction ($N=2$):** Existing collaborative DRL formulations are strictly designed for pairs of networks (e.g., Residential vs. Commercial), lacking mathematical scalability for arbitrary $N$-zone heterogeneous urban topologies.
@@ -75,7 +75,7 @@ This repository presents a **comprehensive, end-to-end, multi-network EV dynamic
 
 ---
 
-## ⚡ Problem Statement & Background
+## Problem Statement & Background
 
 Urban distribution networks are segmented into specialized functional zones—such as **Residential**, **Commercial**, **Industrial**, and **Institutional** districts—each exhibiting distinct diurnal load profiles:
 * **Residential:** Heavy evening peaks ($18:00 - 22:00$) due to domestic appliances and home EV arrivals.
@@ -92,7 +92,7 @@ When thousands of EV owners plug in uncoordinatedly, charging demands superimpos
 
 ---
 
-## 📚 Literature Review & Research Gaps
+## Literature Review & Research Gaps
 
 ### State of Prior Art
 1. **Static and Time-of-Use (TOU) Pricing:** (e.g., Wang et al., 2019; Qian et al., 2021) utilize fixed peak/off-peak price tiers. These tariffs trigger secondary peak rebound effects as consumers simultaneously start charging at the exact moment off-peak rates commence.
@@ -109,7 +109,7 @@ When thousands of EV owners plug in uncoordinatedly, charging demands superimpos
 
 ---
 
-## 🔬 Theoretical Framework & Innovations
+## Theoretical Framework & Innovations
 
 ### 1. Generalized $N$-Network Balancing (Gap 1)
 
@@ -195,7 +195,7 @@ $$p_{\text{final}, i}(t) = \text{clip}\left( p_{0, i} + p_{1, i}(t) + p_{2, i}(t
 
 ---
 
-## 🔄 End-to-End Execution Pipeline
+## End-to-End Execution Pipeline
 
 The repository is modularized into sequential, verifiable stages:
 
@@ -240,7 +240,7 @@ The repository is modularized into sequential, verifiable stages:
 
 ---
 
-## 📊 Empirical Results & Benchmark Comparison
+## Empirical Results & Benchmark Comparison
 
 ### Headline Strategy Benchmarks
 
@@ -287,7 +287,7 @@ Stage 1 verifies that machine learning models provide high-precision load foreca
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 MINI_PROJECT/
@@ -339,7 +339,7 @@ MINI_PROJECT/
 
 ---
 
-## ⚙️ Installation & Quickstart
+## Installation & Quickstart
 
 ### Prerequisites
 * Python 3.10 or higher
@@ -386,7 +386,7 @@ jupyter nbconvert --to notebook --execute Stage4_Evaluation_v2.ipynb
 
 ---
 
-## 🔍 Reproducibility & Verification
+## Reproducibility & Verification
 
 * **Fixed Random Seeds:** All data generators, neural network initializations, experience replay buffers, and XGBoost models are instantiated with deterministic seeds (`seed=42`).
 * **Multi-Seed Robustness Verification:** Stage 4 runs evaluations across multiple random seeds (`[42, 101, 2024, 7, 999]`) to ensure statistical validity of reported results.
@@ -397,7 +397,7 @@ jupyter nbconvert --to notebook --execute Stage4_Evaluation_v2.ipynb
 
 ---
 
-## 📖 References & Citations
+## References & Citations
 
 1. **Lepolesa et al. (2024/2025):** *"Collaborative Dynamic Pricing for Electric Vehicle Charging in Smart Distribution Networks Using Multi-Agent Deep Reinforcement Learning."*
 2. **Lillicrap, T. P., et al. (2016):** *"Continuous control with deep reinforcement learning."* ICLR.
