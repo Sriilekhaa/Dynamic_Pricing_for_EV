@@ -18,14 +18,17 @@
    - [Gap 3: Physics-Based Renewable Energy & Net Load](#3-physics-based-renewable-energy-integration-gap-3)
    - [Collaborative Multi-Agent DDPG Architecture & Exact Pricing Equation](#4-collaborative-multi-agent-ddpg-architecture--exact-pricing-equation)
 5. [End-to-End Execution Pipeline (Stages 0 – 4)](#-end-to-end-execution-pipeline)
-6. [Empirical Results & Benchmark Comparison](#-empirical-results--benchmark-comparison)
-   - [Strategy Comparison (Headline Results)](#headline-strategy-benchmarks)
-   - [4-Way Ablation Study](#4-way-ablation-study)
-   - [Analysis of Peak-to-Average Ratio (PAR) Dynamics](#analysis-of-peak-to-average-ratio-par-dynamics)
-   - [XGBoost Forecasting Performance](#xgboost-load-forecasting-accuracy)
+6. [Empirical Results & Comprehensive Benchmark Compendium](#-empirical-results--comprehensive-benchmark-compendium)
+   - [1. Headline Strategy Benchmarks (Canonical Window)](#1-headline-strategy-benchmarks-canonical-window)
+   - [2. 4-Way Ablation Study (Isolating Gaps 1, 2, and 3)](#2-4-way-ablation-study-isolating-gaps-1-2-and-3)
+   - [3. Statistical Significance & Confidence Bounds (Paired 5-Seed Test)](#3-statistical-significance--confidence-bounds-paired-5-seed-test)
+   - [4. Multi-Seasonal Cross-Validation (Full Annual Cycle)](#4-multi-seasonal-cross-validation-full-annual-cycle)
+   - [5. Collaborative DDPG Neural Pricing Policy Stability (4 Master Seeds)](#5-collaborative-ddpg-neural-pricing-policy-stability-4-master-seeds)
+   - [6. Peak Load vs. Peak-to-Average Ratio (PAR) Dynamics](#6-peak-load-vs-peak-to-average-ratio-par-dynamics)
+   - [7. XGBoost Load Forecasting Accuracy (8 ML Models)](#7-xgboost-load-forecasting-accuracy-8-ml-models)
 7. [Repository Structure](#-repository-structure)
 8. [Installation & Quickstart](#-installation--quickstart)
-9. [Reproducibility & Verification Protocol](#-reproducibility--verification-protocol)
+9. [7-Layer Validation & Verification Protocol](#-7-layer-validation--verification-protocol)
 10. [References & Citations](#-references--citations)
 
 ---
@@ -247,59 +250,96 @@ where $p_{\text{conv}}(t)$ is the baseline conventional time-of-use tariff and $
 
 ---
 
-## 📊 Empirical Results & Benchmark Comparison
+## 📊 Empirical Results & Comprehensive Benchmark Compendium
 
-### Headline Strategy Benchmarks
+### 1. Headline Strategy Benchmarks (Canonical Window)
+*Evaluated across 5 inference stochasticity seeds (`EVAL_SEEDS = [42, 101, 2024, 777, 999]`), $\mu_i = 0.5 \times \max(\text{EV\_Unbalanced}_i)$.*
 
-Benchmarking across four distinct operational strategies (evaluated across 5 inference stochasticity seeds, $\mu_i = 0.5 \times \max(\text{EV\_Unbalanced}_i)$):
+| Strategy | Strategy Description | Max-Min Imbalance (Mean $\pm$ Std) | Cross-Network Std Dev (Mean $\pm$ Std) | Mean PAR (Mean $\pm$ Std) | Imbalance Reduction vs. PV | Improvement vs. Base Paper |
+|:---|:---|:---:|:---:|:---:|:---:|:---:|
+| **PV** | Standalone Peak-Valley (No Balancing) | $0.272920 \pm 0.000806$ | $0.115208 \pm 0.000305$ | $1.344 \pm 0.010$ | Baseline | — |
+| **PVB_OLD** | Base Paper Pairwise Balancing ($N=2$) | $0.260820 \pm 0.000109$ | $0.111630 \pm 0.000043$ | $1.335 \pm 0.001$ | $4.43\%$ | Baseline |
+| **PVB_NEW** | $N=4$ Generalized Balancing (**Gap 1**) | $0.254381 \pm 0.000108$ | $0.104417 \pm 0.000043$ | $1.378 \pm 0.001$ | $6.79\%$ | $2.47\%$ |
+| **PVB_FULL** | **Proposed: $N$-Network + Distance + Renewables** | **$0.220979 \pm 0.000110$** | **$0.090078 \pm 0.000043$** | **$1.416 \pm 0.002$** | **19.03%** | **15.28%** |
 
-| Strategy | Strategy Description | Max-Min Imbalance (Mean $\pm$ Std) | Std Imbalance (Mean $\pm$ Std) | Peak-to-Average Ratio (PAR) |
-| :--- | :--- | :---: | :---: | :---: |
-| **PV** | Standalone Peak-Valley Pricing (No Balancing) | $0.272920 \pm 0.000806$ | $0.115208 \pm 0.000305$ | $1.344 \pm 0.010$ |
-| **PVB_OLD** | Base Paper Pairwise Balancing ($N=2$ extension) | $0.260820 \pm 0.000109$ | $0.111630 \pm 0.000043$ | $1.335 \pm 0.001$ |
-| **PVB_NEW** | $N=4$ Network Balancing (Gap 1 Resolved) | $0.254381 \pm 0.000108$ | $0.104417 \pm 0.000043$ | $1.378 \pm 0.001$ |
-| **PVB_FULL** | **Proposed: $N$-Network + Distance + Renewables** | **$0.220979 \pm 0.000110$** | **$0.090078 \pm 0.000043$** | **$1.416 \pm 0.002$** |
-
-> **Key Findings:**
-> * The proposed **`PVB_FULL`** architecture reduces maximum-minimum network utilization imbalance from **0.272920 down to 0.220979 (a 19.03% reduction)** over uncoordinated PV pricing, and outperforms the base paper's naive pairwise method by **15.28%**.
-> * Cross-network utilization standard deviation decreases from **0.115208 to 0.090078 (a 21.81% reduction)**.
-
----
-
-### 4-Way Ablation Study
-
-To isolate the marginal contribution of each gap, a systematic 4-way ablation was performed:
-
-| Configuration | Features Included | Max-Min Imbalance (Mean $\pm$ Std) | Std Imbalance (Mean $\pm$ Std) | Marginal Contribution |
-| :--- | :--- | :---: | :---: | :---: |
-| **(a) Gap 1 Only** | $N$-Network Formulation ($N=4$) | $0.254381 \pm 0.000108$ | $0.104417 \pm 0.000043$ | Multi-network coordination baseline |
-| **(b) Gap 1 + Gap 2** | $N$-Network + Spatial Distance Friction | $0.253620 \pm 0.000108$ | $0.104139 \pm 0.000043$ | $\Delta = -0.000761$ ($-0.30\%$) |
-| **(c) Gap 1 + Gap 3** | $N$-Network + Renewable Net Load | $0.221623 \pm 0.000110$ | $0.090232 \pm 0.000043$ | $\Delta = -0.032758$ ($-12.88\%$) |
-| **(d) PVB_FULL** | **All Three Gaps Combined (Proposed)** | **$0.220979 \pm 0.000110$** | **$0.090078 \pm 0.000043$** | **$-13.13\%$ overall reduction** |
+> **Key Takeaways:**
+> * `PVB_FULL` achieves a **19.03% reduction in maximum-minimum network utilization imbalance** over uncoordinated PV pricing, and outperforms the base paper's naive pairwise method by **15.28%**.
+> * Cross-network utilization standard deviation decreases from **$0.115208 \rightarrow 0.090078$ (a 21.81% variance reduction)**.
 
 ---
 
-### Analysis of Peak-to-Average Ratio (PAR) Dynamics
+### 2. 4-Way Ablation Study (Isolating Gaps 1, 2, and 3)
 
-While inter-network imbalance and grid utilization spread decrease significantly under `PVB_FULL`, the Peak-to-Average Ratio increases from $1.344$ (PV) to $1.416$ (PVB_FULL). 
-
-An empirical investigation of the 24-hour total load curves reveals the physical mechanism driving this metric:
-* **Absolute Peak Load Decreases Across All Networks:** In every network, the absolute maximum demand (the numerator of PAR) drops under `PVB_FULL` compared to `PV`:
-  * Residential peak: $650.6 \text{ kW} \rightarrow 648.3 \text{ kW}$ ($-0.35\%$)
-  * Commercial peak: $556.8 \text{ kW} \rightarrow 545.3 \text{ kW}$ ($-2.06\%$)
-  * Industrial peak: $1322.5 \text{ kW} \rightarrow 1287.2 \text{ kW}$ ($-2.67\%$)
-  * Institutional peak: $787.8 \text{ kW} \rightarrow 714.5 \text{ kW}$ ($-9.30\%$)
-* **Daytime Renewable Generation Depresses 24-Hour Mean Daily Load:** The integration of rooftop solar PV and wind microgrids (Gap 3) subtracts substantial energy during midday hours, which lowers the **mean 24-hour daily net load** (the denominator of PAR) by $5.7\% - 10.8\%$.
-* **Ratio Effect:** Because residential and commercial residual peak hours occur during non-solar periods (e.g. evening $18:00 - 20:00$ for Residential, early morning $08:00$ for Commercial/Industrial), solar generation cannot shave these non-sunlight hours as aggressively as it reduces midday load. Because the denominator ($\text{Mean Load}$) decreases by $\sim 6\% - 11\%$ while the numerator ($\text{Peak Load}$) decreases by $\sim 0.3\% - 9\%$, the mathematical ratio $\text{PAR} = \frac{\max(P)}{\text{mean}(P)}$ increases. This is an established property of distribution grids with high distributed photovoltaic penetration.
+| Configuration | Theoretical Features Included | Max-Min Imbalance (Mean $\pm$ Std) | Utilization Std Dev (Mean $\pm$ Std) | Marginal Contribution ($\Delta$) | Marginal Improvement % |
+|:---|:---|:---:|:---:|:---:|:---:|
+| **(a) Gap 1 Only** | Generalized $N$-Network Formulation ($N=4$) | $0.254381 \pm 0.000108$ | $0.104417 \pm 0.000043$ | Base Coordination | Baseline |
+| **(b) Gap 1 + Gap 2** | $N$-Network + Haversine Spatial Friction ($W_{ij}$) | $0.253620 \pm 0.000108$ | $0.104139 \pm 0.000043$ | $-0.000761$ | **$-0.30\%$** |
+| **(c) Gap 1 + Gap 3** | $N$-Network + Renewable Net Load | $0.221623 \pm 0.000110$ | $0.090232 \pm 0.000043$ | $-0.032758$ | **$-12.88\%$** |
+| **(d) PVB_FULL** | **All Three Gaps Combined (Proposed)** | **$0.220979 \pm 0.000110$** | **$0.090078 \pm 0.000043$** | **$-0.033402$** | **$-13.13\%$ vs. Gap 1** |
 
 ---
 
-### XGBoost Load Forecasting Accuracy
+### 3. Statistical Significance & Confidence Bounds (Paired 5-Seed Test)
 
-Stage 1 verifies that machine learning models provide high-precision load forecasts across both conventional and renewable net load regimes:
+| Metric / Statistical Parameter | Value | Scientific Interpretation |
+|:---|:---:|:---|
+| **Sample Size ($N$)** | 5 inference seeds (`[42, 101, 2024, 777, 999]`) | Quantifies EV arrival noise bounds |
+| **Mean Absolute Difference ($\overline{\Delta}$)** | **$0.039840$** | Mean grid imbalance drop between PVB_OLD and PVB_FULL |
+| **Standard Error ($\text{SEM}$)** | $3.15 \times 10^{-6}$ | Extremely narrow error bounds across seeds |
+| **95% Confidence Interval** | **$[0.039832, \; 0.039849]$** | Zero distributional overlap with base paper |
+| **Paired $t$-statistic** | $t = 12653.60$ | Highly separated distributions |
+| **Two-tailed $p$-value** | $p = 2.34 \times 10^{-16}$ | Statistically significant improvement over baseline |
+
+---
+
+### 4. Multi-Seasonal Cross-Validation (Full Annual Cycle)
+
+#### Case A: Fixed Annual EV Fleet Scale ($\mu$ Reused from January)
+| Season / Window | PV (No Balancing) | PVB_OLD (Base Paper) | PVB_NEW (Gap 1) | PVB_FULL (Proposed) | vs. PV Reduction % | vs. OLD Reduction % | Ranking Verified |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Winter (Jan, hr 576)** | $0.272920$ | $0.260820$ | $0.254381$ | **$0.220979$** | **19.03%** | **15.28%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+| **Spring (Apr, hr 2400)** | $0.264319$ | $0.249063$ | $0.241689$ | **$0.220589$** | **16.54%** | **11.43%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+| **Summer (Jul, hr 4800)** | $0.320898$ | $0.301592$ | $0.294539$ | **$0.264543$** | **17.56%** | **12.28%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+| **Autumn (Oct, hr 7200)** | $0.255608$ | $0.241764$ | $0.232373$ | **$0.208808$** | **18.31%** | **13.63%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+
+#### Case B: Dynamically Recalculated Seasonal EV Fleet Scale ($\mu$ Scaled to Seasonal Peak)
+| Season / Window | PV (No Balancing) | PVB_OLD (Base Paper) | PVB_NEW (Gap 1) | PVB_FULL (Proposed) | vs. PV Reduction % | vs. OLD Reduction % | Ranking Verified |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Winter (Jan, hr 576)** | $0.272920$ | $0.260820$ | $0.254381$ | **$0.220979$** | **19.03%** | **15.28%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+| **Spring (Apr, hr 2400)** | $0.267163$ | $0.252181$ | $0.243843$ | **$0.222999$** | **16.53%** | **11.57%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+| **Summer (Jul, hr 4800)** | $0.332732$ | $0.311439$ | $0.304127$ | **$0.275435$** | **17.22%** | **11.56%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+| **Autumn (Oct, hr 7200)** | $0.258754$ | $0.245619$ | $0.235702$ | **$0.212611$** | **17.83%** | **13.44%** | $\text{PV} > \text{OLD} > \text{NEW} > \text{FULL}$ |
+
+---
+
+### 5. Collaborative DDPG Neural Pricing Policy Stability (4 Master Seeds)
+*Evaluated across 4 independent training runs from scratch (`MASTER_SEEDS = [42, 7, 123, 2025]`)*
+
+| Network | Mean Dynamic Tariff ($/kWh) | Mean Seed-to-Seed Std ($) | Max Seed-to-Seed Std ($) | Relative Policy Variance % | RL Policy Behavior |
+|:---|:---:|:---:|:---:|:---:|:---|
+| **Residential** | 0.950 | 0.123 | 0.275 | **13.0%** | Consistently taxes evening peak (18:00–22:00) |
+| **Commercial** | 0.938 | 0.113 | 0.320 | **12.1%** | Consistently discounts midday solar valley (11:00–15:00) |
+| **Industrial** | 1.030 | 0.094 | 0.247 | **9.1%** | Smooths morning shift plateau (06:00–18:00) |
+| **Institutional** | 0.953 | 0.064 | 0.191 | **6.7%** | Counters bimodal spikes (08:00–12:00, 14:00–17:00) |
+
+---
+
+### 6. Peak Load vs. Peak-to-Average Ratio (PAR) Dynamics
+
+| Network | PV Absolute Peak (kW) | PVB_FULL Absolute Peak (kW) | Absolute Peak Change % | PV Mean Daily Load (kW) | PVB_FULL Mean Daily Load (kW) | Daily Mean Change % | PV PAR | PVB_FULL PAR |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Residential** | 650.6 (hr 20:00) | 648.3 (hr 18:00) | **$-0.35\%$** | 564.7 | 530.5 | **$-6.05\%$** | 1.152 | 1.222 |
+| **Commercial** | 556.8 (hr 12:00) | 545.3 (hr 08:00) | **$-2.06\%$** | 491.8 | 463.6 | **$-5.72\%$** | 1.132 | 1.176 |
+| **Industrial** | 1322.5 (hr 12:00) | 1287.2 (hr 08:00) | **$-2.67\%$** | 908.5 | 810.8 | **$-10.75\%$** | 1.456 | 1.588 |
+| **Institutional** | 787.8 (hr 09:00) | 714.5 (hr 09:00) | **$-9.30\%$** | 476.2 | 427.0 | **$-10.33\%$** | 1.654 | 1.673 |
+| **Grid Average** | — | — | **$-3.60\%$** | — | — | **$-8.21\%$** | **1.344** | **1.416** |
+
+---
+
+### 7. XGBoost Load Forecasting Accuracy (8 ML Models)
 
 | Network | Target Series | $R^2$ Score | RMSE (kW) | MAE (kW) | MAPE (%) |
-| :--- | :--- | :---: | :---: | :---: | :---: |
+|:---|:---|:---:|:---:|:---:|:---:|
 | **Residential** | Conventional Load | 0.8906 | 33.58 | 23.83 | 5.60% |
 | **Residential** | Net Load (Renewable Adjusted) | 0.9051 | 32.54 | 22.71 | 5.85% |
 | **Commercial** | Conventional Load | 0.9782 | 13.39 | 8.57 | 2.26% |
@@ -315,7 +355,7 @@ Stage 1 verifies that machine learning models provide high-precision load foreca
 
 ```
 MINI_PROJECT/
-├── README.md                                    # Project documentation
+├── README.md                                    # Comprehensive project documentation
 ├── .gitignore                                   # Git ignore rules
 │
 ├── Stage0_N_Network_Dataset.ipynb              # Stage 0: 4-network generation & N=2 equivalence proof
@@ -399,25 +439,30 @@ jupyter nbconvert --to notebook --execute Stage4_Evaluation_v2.ipynb
 
 ---
 
-## 🔍 Reproducibility & Verification Protocol
+## 🔍 7-Layer Validation & Verification Protocol
 
-Our verification protocol explicitly separates two distinct testing dimensions:
+```
+                              ┌──────────────────────────────────────────────────────────┐
+                              │            7-LAYER VALIDATION MATRIX                     │
+                              └────────────────────────────┬─────────────────────────────┘
+                                                           │
+       ┌───────────────────┬───────────────────┬───────────┴───────┬───────────────────┬───────────────────┐
+       ▼                   ▼                   ▼                   ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  LAYER 1     │    │  LAYER 2     │    │  LAYER 3     │    │  LAYER 4     │    │  LAYER 5     │    │  LAYER 6 & 7 │
+│ Ground-Truth │    │ Mathematical │    │ Real Physics │    │ Bit-Exact    │    │ Multi-Seed   │    │ Multi-Season │
+│ Baseline     │    │ Equivalence  │    │ Telemetry    │    │ Determinism  │    │ DRL Training │    │ & Paired     │
+│ (IEEE 2025)  │    │ Proof (N=2)  │    │ (Tetouan)    │    │ (Δ = 0.00)   │    │ (32 Agents)  │    │ Statistics   │
+└──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
+```
 
-### 1. Inference-Time Demand Stochasticity (5 Seeds)
-* **Seed Set:** `EVAL_SEEDS = [42, 101, 2024, 777, 999]`
-* **Purpose:** Evaluates the impact of stochastic Gaussian noise perturbations in EV arrival and charging demand generation at inference evaluation time.
-* **Scope:** Quantifies inference-level error bounds on the closed-form demand formulation.
-
-### 2. DDPG Training-Initialization Robustness (4 Seeds)
-* **Seed Set:** `MASTER_SEEDS = [42, 7, 123, 2025]`
-* **Purpose:** Tests neural network weight initialization, replay buffer transition sampling order, and gradient update trajectories by retraining all 8 agents from scratch for each seed.
-* **Findings:** The headline closed-form load-balancing metrics are deterministic and mathematically invariant to RL initialization by construction. The collaborative DDPG pricing policy, evaluated separately, exhibits typical RL run-to-run variability ($6.7\%–13.0\%$ relative standard deviation across training seeds) while consistently learning to peak tariffs during high-load hours and discount during midday solar availability across all seeds.
-
-### 3. Backward Compatibility Verification
-* Stage 0 includes an automated assertion verifying that setting $N=2$ produces numerical identity with the base paper pairwise formulation:
-  ```python
-  assert np.allclose(util_diff_n2[:, 0], util_diff_base_paper[:, 0], atol=1e-7)
-  ```
+1. **Ground-Truth Baseline Adherence (Lepolesa et al., IEEE TSG 2025):** Cloned and verified directly against [`Leloko/DRLDynamicPricing`](https://github.com/Leloko/DRLDynamicPricing), matching dimensions, test index (`TEST_START = 192 * 3`), and the two-tier formula vs. DRL pricing design.
+2. **Mathematical Boundary Equivalence ($N=2$):** Automated unit assertions confirm that our $N$-network equation reduces identically to the base paper pairwise formulation with zero numerical deviation ($\text{atol} = 10^{-7}$).
+3. **Real Empirical Telemetry (Tetouan Smart Grid):** 8,736 hours of real substation power consumption, ambient temperature, wind speeds, and diffuse solar irradiance from Tetouan, Morocco.
+4. **Bit-Exact Deterministic Reproducibility:** Re-running the pipeline from scratch across fresh kernel sessions yields identical numbers ($\Delta = 0.00\text{e+}00$).
+5. **Multi-Seed Neural Training Robustness:** Retraining 32 Actor-Critic agents from scratch across 4 random seeds (`42, 7, 123, 2025`) confirms consistent tariff learning ($6.7\% - 13.0\%$ RL variance).
+6. **Multi-Seasonal Cross-Validation:** Verified across Winter, Spring, Summer, and Autumn windows under both constant and dynamically recalculated $\mu$, with the ranking $\text{PV} > \text{PVB\_OLD} > \text{PVB\_NEW} > \text{PVB\_FULL}$ holding $100\%$ strictly.
+7. **Paired Statistical Significance Testing:** Paired $t$-test ($t = 12653.60, p = 2.34 \times 10^{-16}$) and 95% Confidence Interval ($[0.039832, 0.039849]$) confirm distinct separation from the baseline.
 
 ---
 
