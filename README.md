@@ -8,17 +8,17 @@
 
 ---
 
-## 📑 Table of Contents
-1. [Executive Summary](#-executive-summary)
-2. [Problem Statement & Background](#-problem-statement--background)
-3. [Literature Review & Research Gaps](#-literature-review--research-gaps)
-4. [Theoretical Framework & Equations](#-theoretical-framework--equations)
+## Table of Contents
+1. [Executive Summary](#executive-summary)
+2. [Problem Statement & Background](#problem-statement--background)
+3. [Literature Review & Research Gaps](#literature-review--research-gaps)
+4. [Theoretical Framework & Equations](#theoretical-framework--equations)
    - [Gap 1: Generalized $N$-Network Balancing Formulation](#1-generalized-n-network-balancing-gap-1)
    - [Gap 2: Spatial Friction & Haversine Distance Decay](#2-spatial-friction--distance-decay-gap-2)
    - [Gap 3: Physics-Based Renewable Energy & Net Load](#3-physics-based-renewable-energy-integration-gap-3)
    - [Collaborative Multi-Agent DDPG Architecture & Exact Pricing Equation](#4-collaborative-multi-agent-ddpg-architecture--exact-pricing-equation)
-5. [End-to-End Execution Pipeline (Stages 0 – 4)](#-end-to-end-execution-pipeline)
-6. [Empirical Results & Comprehensive Benchmark Compendium](#-empirical-results--comprehensive-benchmark-compendium)
+5. [End-to-End Execution Pipeline (Stages 0 – 4)](#end-to-end-execution-pipeline)
+6. [Empirical Results & Comprehensive Benchmark Compendium](#empirical-results--comprehensive-benchmark-compendium)
    - [1. Headline Strategy Benchmarks (Canonical Window)](#1-headline-strategy-benchmarks-canonical-window)
    - [2. 4-Way Ablation Study (Isolating Gaps 1, 2, and 3)](#2-4-way-ablation-study-isolating-gaps-1-2-and-3)
    - [3. Statistical Significance & Confidence Bounds (Paired 5-Seed Test)](#3-statistical-significance--confidence-bounds-paired-5-seed-test)
@@ -26,14 +26,14 @@
    - [5. Collaborative DDPG Neural Pricing Policy Stability (4 Master Seeds)](#5-collaborative-ddpg-neural-pricing-policy-stability-4-master-seeds)
    - [6. Peak Load vs. Peak-to-Average Ratio (PAR) Dynamics](#6-peak-load-vs-peak-to-average-ratio-par-dynamics)
    - [7. XGBoost Load Forecasting Accuracy (8 ML Models)](#7-xgboost-load-forecasting-accuracy-8-ml-models)
-7. [Repository Structure](#-repository-structure)
-8. [Installation & Quickstart](#-installation--quickstart)
-9. [7-Layer Validation & Verification Protocol](#-7-layer-validation--verification-protocol)
-10. [References & Citations](#-references--citations)
+7. [Repository Structure](#repository-structure)
+8. [Installation & Quickstart](#installation--quickstart)
+9. [7-Layer Validation & Verification Protocol](#7-layer-validation--verification-protocol)
+10. [References & Citations](#references--citations)
 
 ---
 
-## 🔭 Executive Summary
+## Executive Summary
 
 The exponential adoption of Electric Vehicles (EVs) introduces substantial localized power surges, transformer overloading, and phase imbalances across urban distribution grids. Traditional flat or time-of-use (TOU) tariffs fail to prevent synchronized peak-hour charging. While recent Deep Reinforcement Learning (DRL) frameworks propose dynamic pricing to shift EV charging to off-peak periods, state-of-the-art literature has remained bottlenecked by three major unaddressed gaps:
 1. **Dyadic Network Restriction ($N=2$):** Existing collaborative DRL formulations are strictly designed for pairs of networks (e.g., Residential vs. Commercial), lacking mathematical scalability for arbitrary $N$-zone heterogeneous urban topologies.
@@ -79,7 +79,7 @@ This repository presents a **multi-network EV dynamic pricing and collaborative 
 
 ---
 
-## ⚡ Problem Statement & Background
+## Problem Statement & Background
 
 Urban distribution networks are segmented into specialized functional zones—such as **Residential**, **Commercial**, **Industrial**, and **Institutional** districts—each exhibiting distinct diurnal load profiles:
 * **Residential:** Heavy evening peaks ($18:00 - 22:00$) due to domestic appliances and home EV arrivals.
@@ -96,7 +96,7 @@ When thousands of EV owners plug in uncoordinatedly, charging demands superimpos
 
 ---
 
-## 📚 Literature Review & Research Gaps
+## Literature Review & Research Gaps
 
 ### State of Prior Art
 1. **Static and Time-of-Use (TOU) Pricing:** (e.g., Wang et al., 2019; Qian et al., 2021) utilize fixed peak/off-peak price tiers. These tariffs trigger secondary peak rebound effects as consumers simultaneously start charging at the exact moment off-peak rates commence.
@@ -113,7 +113,7 @@ When thousands of EV owners plug in uncoordinatedly, charging demands superimpos
 
 ---
 
-## 🔬 Theoretical Framework & Equations
+## Theoretical Framework & Equations
 
 ### 1. Generalized $N$-Network Balancing (Gap 1)
 
@@ -207,7 +207,7 @@ where $p_{\text{conv}}(t)$ is the baseline conventional time-of-use tariff and $
 
 ---
 
-## 🔄 End-to-End Execution Pipeline
+## End-to-End Execution Pipeline
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
@@ -250,7 +250,7 @@ where $p_{\text{conv}}(t)$ is the baseline conventional time-of-use tariff and $
 
 ---
 
-## 📊 Empirical Results & Comprehensive Benchmark Compendium
+## Empirical Results & Comprehensive Benchmark Compendium
 
 ### 1. Headline Strategy Benchmarks (Canonical Window)
 *Evaluated across 5 inference stochasticity seeds (`EVAL_SEEDS = [42, 101, 2024, 777, 999]`), $\mu_i = 0.5 \times \max(\text{EV\_Unbalanced}_i)$.*
@@ -351,7 +351,7 @@ where $p_{\text{conv}}(t)$ is the baseline conventional time-of-use tariff and $
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 MINI_PROJECT/
@@ -405,7 +405,7 @@ MINI_PROJECT/
 
 ---
 
-## ⚙️ Installation & Quickstart
+## Installation & Quickstart
 
 ### Prerequisites
 * Python 3.10 or higher
@@ -439,7 +439,7 @@ jupyter nbconvert --to notebook --execute Stage4_Evaluation_v2.ipynb
 
 ---
 
-## 🔍 7-Layer Validation & Verification Protocol
+## 7-Layer Validation & Verification Protocol
 
 ```
                               ┌──────────────────────────────────────────────────────────┐
@@ -466,7 +466,7 @@ jupyter nbconvert --to notebook --execute Stage4_Evaluation_v2.ipynb
 
 ---
 
-## 📖 References & Citations
+## References & Citations
 
 1. **Lepolesa et al. (2025):** *"Dynamic Electric Vehicle Charging Pricing for Load Balancing in Power Distribution Networks based on Collaborative DDPG Agents,"* IEEE Transactions on Smart Grid.
 2. **Lillicrap, T. P., et al. (2016):** *"Continuous control with deep reinforcement learning,"* International Conference on Learning Representations (ICLR).
