@@ -1,0 +1,9 @@
+Window,Season,hour_start,Mu_Mode,PV,PVB_OLD,PVB_NEW,PVB_FULL
+Window 0,Winter,576,Case A (Fixed Jan mu),0.27292,0.26082,0.254381,0.220979
+Window 0,Winter,576,Case B (Per-Window Recalculated mu),0.27292,0.26082,0.254381,0.220979
+Window 1,Spring,2400,Case A (Fixed Jan mu),0.264319,0.249063,0.241689,0.220589
+Window 1,Spring,2400,Case B (Per-Window Recalculated mu),0.267163,0.252181,0.243843,0.222999
+Window 2,Summer,4800,Case A (Fixed Jan mu),0.320898,0.301592,0.294539,0.264543
+Window 2,Summer,4800,Case B (Per-Window Recalculated mu),0.332732,0.311439,0.304127,0.275435
+Window 3,Autumn,7200,Case A (Fixed Jan mu),0.255608,0.241764,0.232373,0.208808
+Window 3,Autumn,7200,Case B (Per-Window Recalculated mu),0.258754,0.245619,0.235702,0.212611

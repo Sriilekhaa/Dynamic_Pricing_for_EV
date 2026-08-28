@@ -168,8 +168,8 @@ $$\Delta U_{i, \text{dist}}(t) = \max\left(\text{util}_i(t) - \sum_{j \neq i}^{N
 Rather than treating renewable generation as an arbitrary time series, we model energy conversion directly from empirical Tetouan meteorological readings:
 
 #### Solar Photovoltaic Model:
-$$P_{\text{solar}, i}(t) = G(t) \cdot A_{\text{PV}, i} \cdot \eta_{\text{PV}} \cdot \eta_{\text{inv}}$$
-where $G(t) = \text{GeneralDiffuseFlows}(t) + \text{DiffuseFlows}(t)$ ($\text{W/m}^2$), with panel efficiency $\eta_{\text{PV}} = 18\%$ and inverter efficiency $\eta_{\text{inv}} = 95\%$.
+$$P_{\text{solar}, i}(t) = G(t) \cdot A_{\text{PV}, i} \cdot \eta_{\text{PV}}$$
+where $G(t) = \text{GeneralDiffuseFlows}(t) + \text{DiffuseFlows}(t)$ ($\text{W/m}^2$), with commercial monocrystalline silicon panel efficiency $\eta_{\text{PV}} = 18\%$ (matching the codebase parameter `SOLAR_EFFICIENCY = 0.18`).
 
 #### Wind Turbine Kinetic Model:
 $$P_{\text{wind}, i}(t) = \begin{cases} 
@@ -177,6 +177,7 @@ $$P_{\text{wind}, i}(t) = \begin{cases}
 \frac{1}{2} \rho A_{\text{rotor}} C_p v(t)^3 \cdot n_{\text{turbines}, i}, & v_{\text{cut-in}} \le v(t) < v_{\text{rated}} \\
 P_{\text{rated}} \cdot n_{\text{turbines}, i}, & v_{\text{rated}} \le v(t) < v_{\text{cut-out}}
 \end{cases}$$
+where cut-in speed $v_{\text{cut-in}} = 1.5\text{ m/s}$, rated speed $v_{\text{rated}} = 9.0\text{ m/s}$, cut-out speed $v_{\text{cut-out}} = 20.0\text{ m/s}$, air density $\rho = 1.225\text{ kg/m}^3$, and power coefficient $C_p = 0.35$ (matching the codebase parameters in `Stage0_75_Renewable_Profiles.ipynb`).
 
 #### Net Load Formulation (with 5% Conventional Baseload Floor):
 $$P_{\text{net}, i}(t) = \max\left(0.05 \cdot P_{\text{conv}, i}(t), \; P_{\text{conv}, i}(t) - P_{\text{solar}, i}(t) - P_{\text{wind}, i}(t)\right)$$
@@ -322,6 +323,10 @@ where $p_{\text{conv}}(t)$ is the baseline conventional time-of-use tariff and $
 | **Industrial** | 1.030 | 0.094 | 0.247 | **9.1%** | Smooths morning shift plateau (06:00–18:00) |
 | **Institutional** | 0.953 | 0.064 | 0.191 | **6.7%** | Counters bimodal spikes (08:00–12:00, 14:00–17:00) |
 
+> **Methodological Clarification on Seed Roles:**
+> * **Closed-Form Benchmark & Ablation Determinism:** The headline strategy metrics (`final_evaluation_summary_canonical.csv` and `ablation_study_summary_canonical.csv`) are deterministic functions of the 5 `EVAL_SEEDS` on the closed-form demand formulation. Because they do not invoke the DDPG neural network at inference time, their metrics across master seeds 42, 7, 123, and 2025 in `robustness_benchmark_training_seeds.csv` and `robustness_ablation_training_seeds.csv` are mathematically invariant by construction.
+> * **DDPG Policy Training Robustness:** The 4 master training seeds (`42, 7, 123, 2025`) specifically evaluate neural network weight initialization, replay buffer transition sampling, and Actor-Critic convergence trajectories. As documented in `robustness_ddpg_pricing_training_seeds.csv`, the trained pricing policies exhibit expected RL run-to-run variance of **$6.7\%–13.0\%$** across networks while consistently learning to peak tariffs during grid congestion and discount during midday solar availability.
+
 ---
 
 ### 6. Peak Load vs. Peak-to-Average Ratio (PAR) Dynamics
@@ -460,7 +465,7 @@ jupyter nbconvert --to notebook --execute Stage4_Evaluation_v2.ipynb
 2. **Mathematical Boundary Equivalence ($N=2$):** Automated unit assertions confirm that our $N$-network equation reduces identically to the base paper pairwise formulation with zero numerical deviation ($\text{atol} = 10^{-7}$).
 3. **Real Empirical Telemetry (Tetouan Smart Grid):** 8,736 hours of real substation power consumption, ambient temperature, wind speeds, and diffuse solar irradiance from Tetouan, Morocco.
 4. **Bit-Exact Deterministic Reproducibility:** Re-running the pipeline from scratch across fresh kernel sessions yields identical numbers ($\Delta = 0.00\text{e+}00$).
-5. **Multi-Seed Neural Training Robustness:** Retraining 32 Actor-Critic agents from scratch across 4 random seeds (`42, 7, 123, 2025`) confirms consistent tariff learning ($6.7\% - 13.0\%$ RL variance).
+5. **Multi-Seed DDPG Policy Training Robustness:** Retraining 32 Actor-Critic agents from scratch across 4 random seeds (`42, 7, 123, 2025`) confirms consistent convergence of the decentralized pricing mechanism ($6.7\% - 13.0\%$ RL policy variance). Note that headline closed-form benchmark and ablation tables are deterministic functions of the 5 `EVAL_SEEDS` on the closed-form demand formulation and are invariant to DDPG training seeds by construction.
 6. **Multi-Seasonal Cross-Validation:** Verified across Winter, Spring, Summer, and Autumn windows under both constant and dynamically recalculated $\mu$, with the ranking $\text{PV} > \text{PVB\_OLD} > \text{PVB\_NEW} > \text{PVB\_FULL}$ holding $100\%$ strictly.
 7. **Paired Statistical Significance Testing:** Paired $t$-test ($t = 12653.60, p = 2.34 \times 10^{-16}$) and 95% Confidence Interval ($[0.039832, 0.039849]$) confirm distinct separation from the baseline.
 
