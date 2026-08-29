@@ -1,0 +1,1313 @@
+% ======================================================================
+%  Manuscript prepared for IEEE Transactions on Smart Grid.
+%  Format follows the reference manuscript (IEEEtran, journal, 10 pt,
+%  two-column): L. J. Lepolesa et al., arXiv:2511.06398.
+%
+%  HOW TO ADD THE REMAINING COLBAB GRAPHS (figures 3-9):
+%   The system architecture (Fig. 1) and pipeline (Fig. 2) are drawn with
+%   TikZ and render automatically; they can be replaced with higher-res
+%   PNGs later if desired.
+%   1. Create a folder  figs/  next to this file.
+%   2. Export each remaining plot from Colab as .PNG and save it with the
+%      exact filename shown in the boxed placeholder.
+%   3. Recompile - the placeholder is replaced automatically, so the
+%      document always compiles even before images are inserted.
+%
+%  Compile: pdflatex -> pdflatex  (references are hand-written; no .bib).
+%  On Overleaf the IEEEtran class is available automatically.
+% ======================================================================
+\documentclass[10pt,journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+
+\graphicspath{{figs/}}
+
+% ---- Conditional figure include: shows a boxed placeholder until the PNG exists
+\newcommand{\paperfig}[4][\columnwidth]{%
+  \begin{figure}[!t]
+    \centering
+    \IfFileExists{figs/#2}{%
+      \includegraphics[width=#1]{#2}%
+    }{%
+      \fbox{\parbox[c][0.45\linewidth][c]{0.92#1}{%
+        \centering\small\itshape INSERT COLBAB GRAPH HERE\\[3pt]
+        \upshape\footnotesize save as \texttt{figs/#2}}}}%
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+\newcommand{\D}{\Delta}
+\newcommand{\util}{\mathrm{util}}
+\newcommand{\norm}[1]{\mathrm{norm}\{#1\}}
+
+\begin{document}
+
+\title{Generalized $N$-Network EV Charging Pricing with Distance-Aware
+Collaborative DRL and Renewable Net-Load Balancing}
+
+% AUTHOR BLOCK - clean two-author header, matching the reference manuscript.
+% Re-add affiliations/e-mails at submission time, e.g.:
+%   \thanks{Srilekha~R. and Pavithra~S. are with the Department,
+%   Institution, City, Country (e-mail: \{author1, author2\}@institution.edu).}
+\author{Srilekha~R.,~and~Pavithra~S.}
+
+\maketitle
+
+% ======================================================================
+\begin{abstract}
+Collaborative deep deterministic policy gradient (DDPG) agents have been
+shown to balance EV charging load across two adjacent distribution
+networks. That formulation is restricted to exactly two networks, assumes
+drivers are equally willing to charge at any neighboring network
+regardless of distance, and neglects on-site renewables. We generalize the
+balancing signal to an arbitrary number of networks (with an exact
+reduction to the pairwise formula when $N{=}2$, proven algebraically and
+verified numerically at tolerance $10^{-7}$), introduce a
+Haversine-distance exponential decay that weights each neighbor's influence
+by physical proximity, and reformulate pricing and demand response in terms
+of a solar/wind-adjusted net load with a $5\%$ baseload floor. On a real
+Tetouan, Morocco-grounded four-network testbed, the combined framework
+reduces the maximum--minimum cross-network utilization imbalance by
+$19.03\%$ relative to uncoordinated pricing and by $15.28\%$ relative to the
+original pairwise formulation, with the ranking preserved across four
+seasons and independent DDPG training initializations. A four-way ablation
+attributes most of the gain to renewable net-load integration. A re-analysis
+of the base paper's own two-network data shows that a structural EV
+peak-uniformity limitation is inherited from its independent min-max
+normalization, not introduced by our extensions.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Electric vehicle charging, dynamic pricing, collaborative deep
+reinforcement learning, DDPG, multi-network load balancing, distance decay,
+renewable net load, smart grid.
+\end{IEEEkeywords}
+
+% ======================================================================
+\section{Introduction}\label{sec:intro}
+\IEEEPARstart{T}{he} electrification of road transport is progressing
+rapidly worldwide, and with it the concentration of a new, large, and
+time-flexible electrical load on urban distribution systems. Global sales
+of battery-electric vehicles grew by more than half in 2022, crossing ten
+million units in a single year for the first time, a trajectory summarized
+in the international outlook reported alongside the base
+framework~\cite{lepolesa2026}. Because most charging happens at home and in
+workplaces at the end of the working day,
+EV charging demand coincides with the existing evening peak in many
+feeders, elevating peak-to-average ratios, accelerating transformer and
+feeder aging, increasing line losses, and in the limit forcing costly
+network reinforcement that would otherwise be unnecessary
+\cite{clement2010,richardson2012tsg,richardson2012tpwrs,oconnell2014}. The
+magnitude of this stress depends fundamentally on how charging is
+coordinated: uncontrolled charging has long been shown to degrade voltage
+profiles and overload equipment
+\cite{clement2010,richardson2012tsg}, whereas controlled and price-guided
+charging can keep the same feeder within statutory limits while
+accommodating far higher EV penetrations
+\cite{richardson2012tsg,richardson2012tpwrs,oconnell2014,gan2013,callaway2011}.
+
+Grid-impact results are typically reported at the feeder level, and for
+good reason: distribution transformers and feeders are sized for their
+historical load mix, leaving little thermal headroom for an entire
+light-duty fleet. Uncoordinated evening charging has long been associated
+with accelerated transformer aging, undervoltage, and feeder overloading
+on low-voltage networks~\cite{clement2010,richardson2012tsg}, and the
+feeder-reconfiguration literature treats load-carrying capacity as the
+binding constraint on new load integration~\cite{baran1989}. Transmission
+corridors are planned with larger margins, but primary and secondary
+feeders rarely double as hosting assets for fleet-scale electrification.
+The relevant decision variable in this paper is therefore the
+\emph{distribution-level} load shape, and specifically its cross-network
+spread, rather than aggregate system demand.
+
+Retail electricity pricing is the most widely deployed instrument for
+steering this demand. Yet evidence from real implementations is cautionary.
+Large-scale field experiments show that static time-of-use (TOU) tariffs
+shift charging into the off-peak window but simultaneously create a
+``shadow peak'' at the window boundary, which in some demonstrations
+exceeds the original evening peak~\cite{bailey2025,samende2025,jones2022}.
+Aggregating fifteen pricing pilots, Faruqui and Sergici report that plain
+TOU designs shave peak demand by only $3$--$6\%$, while finer-grained
+dynamic tariffs reach $13$--$44\%$ when paired with enabling automation
+\cite{faruqui2010}. Borenstein further shows, from a long-run welfare
+perspective, that coarse two-part tariffs capture only a small fraction of
+the efficiency gains of fast, real-time retail pricing~\cite{borenstein2005}.
+Collectively these works establish two requirements for effective EV tariff
+design: prices must adapt continuously to grid state, and they must be
+allowed to differ across space as well as time.
+
+The practical stakes are large. Distribution-operator deployment studies,
+reported in the base framework~\cite{lepolesa2026}, anticipate that a
+substantial fraction of primary feeders will require reinforcement by the
+mid-2030s--2040s if fleet charging continues to be attracted to the same
+evening window. In a solar-rich grid the marginal cost of a midday charge
+is close to its opportunity floor, whereas an evening charge effectively
+prices in that reinforcement; even a moderate relocation of demand
+therefore has material economic value. This is the economic argument for
+pricing that varies in \emph{time} and \emph{place} simultaneously--the
+two degrees of freedom exploited by the collaborative framework below.
+
+Deep reinforcement learning (DRL) has emerged as the natural framework for
+the first requirement. Deep Q-networks~\cite{mnih2015}, and in particular
+the continuous-control algorithms deep deterministic policy gradient
+(DDPG)~\cite{lillicrap2016}, Soft Actor-Critic~\cite{haarnoja2018}, and
+Proximal Policy Optimization~\cite{schulman2017}, have enabled agents to
+learn price or dispatch policies directly from raw load and market states.
+Applied to EV pricing, DDPG has been used for aggregator tariff
+design~\cite{qiu2020tia,liu2021access}, charging-station revenue
+maximization~\cite{zhao2022tte}, demand-responsiveness pricing
+\cite{lai2022tsg,cui2021tsg}, vehicle-to-grid scheduling~\cite{aljafari2023},
+and, more recently, coordination across multiple market or charging
+entities~\cite{ye2023,yang2024,paudel2023}. Surveys of reinforcement learning
+for demand response summarize this body of work and repeatedly identify two
+cautionary patterns: most systems are single-agent and single-network, and
+when prices are demand-dependent there is a real risk of merely shifting
+rather than shaving peaks~\cite{vazquez2019}.
+
+Taken together, the literature suggests a clean separation of concerns that
+this work adopts: gradient-boosted forecasting supplies accurate day-ahead
+net-load trajectories~\cite{chen2016,ke2017,hong2016,wang2016recency}; a
+closed-form, price-sensitive demand model translates tariff signals into
+fleet-level charging decisions~\cite{lepolesa2026}; and DRL agents optimize
+the pricing policy that couples the
+two~\cite{lillicrap2016,haarnoja2018}. The separation is deliberate: it
+keeps every component independently verifiable, and it lets the ablation
+study in Section~\ref{sec:results} attribute the measured gains to the
+exact stage that produced them.
+
+Among these works, the collaborative framework of Lepolesa \emph{et al.} is
+distinct because its explicit objective is not peak-shaving alone but
+\emph{load balancing across} distribution networks: two DDPG agents per
+network jointly set EV charging tariffs for a residential and a commercial
+feeder so that a utilization-difference signal between the two networks is
+reduced, in addition to the conventional peak-valley (PV) objective
+\cite{lepolesa2026}. In that architecture the DDPG agents act as the pricing
+mechanism while the reported utilization metrics are computed from a
+closed-form EV demand-response equation; this two-tier evaluation protocol
+is faithful to the base method and is reproduced exactly in this work
+(Section~\ref{sec:framework}).
+
+Three limitations nonetheless remain, and each is explicitly named as
+future work by the original authors~\cite{lepolesa2026}. (i)~The balancing
+formulation is restricted to exactly two networks, whereas urban
+distribution systems naturally comprise many interconnected zones.
+(ii)~EV drivers are assumed to shift charging to any neighbor with equal
+willingness, regardless of the physical distance between charging sites--an
+assumption that contradicts the distance-sensitive location and mode-choice
+behavior established in the spatial-interaction and charging-network
+literature~\cite{huff1964,frade2011}. (iii)~The pricing and demand model
+considers only conventional load, even though solar and wind penetration
+already reshape the net-load envelope of modern
+feeders~\cite{hoke2013}.
+
+The spatial dimension is not a cosmetic addition. Charging choices are
+jointly driven by price and proximity: drivers measurably discount a
+cheaper tariff when it requires a longer detour, a principle formalized by
+gravity and Huff-style models of spatial interaction and applied in
+charging-network planning~\cite{huff1964,frade2011}. A balancing scheme
+that treats every neighbor as equally reachable therefore misdirects
+demand, placing excessive weight on distant networks. Replacing that
+implicit equal-distance assumption with a calibrated exponential decay over
+real zone coordinates is one of the three extensions developed here, and
+its quantitative role is isolated in the ablation of
+Section~\ref{sec:results}.
+
+This paper closes all three gaps within one consistent framework. The
+contributions are as follows.
+\begin{enumerate}
+  \item \textbf{Generalized $N$-network balancing.} We extend the pairwise
+        utilization-difference signal to an arbitrary number of networks
+        $N>2$, comparing each network against the mean utilization of the
+        other $N-1$ networks. We prove that the formula reduces exactly to
+        the base pairwise signal when $N=2$, and confirm the reduction
+        numerically at absolute tolerance $10^{-7}$.
+  \item \textbf{Distance-aware balancing.} We ground each network at a real
+        geographic coordinate and weight each neighbor's contribution to the
+        balancing signal by a Haversine-distance exponential decay, placing
+        the collaborative pricing loop on the same footing as classical
+        gravity models of spatial interaction~\cite{huff1964}.
+  \item \textbf{Renewable net-load integration.} We derive physics-based
+        solar-photovoltaic and wind generation estimates directly from the
+        real meteorological columns already present in the public dataset,
+        and reformulate the pricing and demand-response equations in terms
+        of renewable-adjusted net load with a $5\%$ baseload floor.
+  \item \textbf{Validation and inheritance analysis.} On a four-network
+        testbed grounded in real Tetouan, Morocco telemetry, we show that
+        the combined framework (PVB\_FULL) reduces the maximum--minimum
+        cross-network utilization imbalance by $19.03\%$ relative to
+        uncoordinated pricing and by $15.28\%$ relative to the original
+        pairwise formulation, with the ranking preserved across four
+        seasonal windows, five inference-noise seeds, and four DDPG
+        training seeds. A four-way ablation isolates the marginal
+        contribution of each extension, and a direct re-analysis of the
+        base paper's own two-network data reveals that a structural
+        EV peak-uniformity property is inherited from its independent
+        min-max normalization.
+\end{enumerate}
+
+The remainder of the paper is organized as follows.
+Section~\ref{sec:rw} reviews related work. Section~\ref{sec:prelim}
+formalizes the problem and the base formulations. Section~\ref{sec:framework}
+presents the three extensions and the combined architecture.
+Section~\ref{sec:setup} describes the testbed and evaluation protocol.
+Section~\ref{sec:results} reports the results, including the
+inherited-limitation analysis. Section~\ref{sec:disc} discusses the distance
+decay, the inherited uniformity limitation, and threats to validity.
+Section~\ref{sec:conc} concludes and outlines future work.
+
+% ======================================================================
+\section{Related Work}\label{sec:rw}
+
+\subsection{Time-of-Use and Dynamic Pricing}
+TOU tariffs remain the most widely deployed EV price signal, yet their
+empirical record is mixed. In a large-scale residential field experiment,
+Bailey \emph{et al.} observed that TOU pricing shifted charging out of peak
+periods but created larger simultaneous shadow peaks, increasing local
+capacity-exceedance risk~\cite{bailey2025}. Complementing this with real
+distribution-transformer telemetry, Samende \emph{et al.} demonstrated a
+``herding effect'' in which uncoordinated smart chargers responding to one
+discounted window produce a new peak that, above roughly $20$--$30\%$ EV
+penetration, exceeds the traditional evening
+peak~\cite{samende2025}. Simulation studies corroborate the effect, with
+reported induced peaks of up to $20\%$ when most charging begins immediately
+after on-peak periods end~\cite{jones2022}. On the economics side, Faruqui
+and Sergici's survey of fifteen pilots quantifies the peak-demand response
+achievable under different tariff granularities~\cite{faruqui2010}, and
+Borenstein's long-run analysis quantifies the efficiency ceiling of coarse
+two-part tariffs relative to real-time retail prices~\cite{borenstein2005}.
+These works imply that tariff design should adapt continuously and be
+spatially differentiated--the direction pursued here.
+
+\subsection{EV Charging Control and Distribution-Grid Impact}
+Charging management has been treated as a network problem for over a
+decade. Clement-Nyns \emph{et al.} showed that uncoordinated PHEV charging
+raises residential losses and voltage deviations, and that coordinated
+charging mitigates both~\cite{clement2010}. Richardson \emph{et al.}
+compared local and centralized charging strategies on low-voltage
+feeders~\cite{richardson2012tsg}, and showed earlier that LP-based optimal
+charging maximizes the EV capacity a feeder can host without
+reinforcement~\cite{richardson2012tpwrs}. O'Connell \emph{et al.}
+introduced a rolling multi-period optimization that re-solves charging
+plans hourly in response to forecast
+updates~\cite{oconnell2014}. Analytically, Gan, Topcu, and Low proved that a
+decentralized price-update protocol converges to an aggregate-valley-filling
+charging profile~\cite{gan2013}, Ma \emph{et al.} established a Nash
+equilibrium for decentralized charging of large vehicle
+populations~\cite{ma2013}, and Callaway and Hiskens characterized the
+controllability of aggregate electric loads including
+EVs~\cite{callaway2011}. At the distribution-operation level, the
+load-balancing view of feeder operation goes back to the reconfiguration
+framework of Baran and Wu~\cite{baran1989}. All of these works treat
+imbalance as a cross-feeder, cross-time problem at its core--the same view
+adopted by the collaborative pricing framework we generalize.
+
+\subsection{Deep Reinforcement Learning for Pricing and Demand Response}
+DDPG~\cite{lillicrap2016} extends the deep Q-learning paradigm
+\cite{mnih2015} to continuous action spaces and, together with its
+off-policy entropy-maximizing and on-policy successors
+\cite{haarnoja2018,schulman2017}, defines the practical toolbox for
+continuous price and dispatch control. Survey evidence shows that RL-based
+demand response is effective but remains dominated by single-agent,
+single-network settings with demand-independent prices--precisely the gaps
+that multi-agent price coordination is meant to fill~\cite{vazquez2019}.
+Applied to EV charging, DDPG has been reported for aggregator tariff
+optimization and grid-load smoothing~\cite{qiu2020tia,liu2021access};
+station-level revenue and response-aware pricing \cite{zhao2022tte},
+\cite{lai2022tsg}; public-station pricing in coupled transportation-power
+systems~\cite{cui2021tsg}; charging control with dynamic user behavior
+\cite{yan2021tsg}; multi-agent charge/discharge scheduling
+\cite{aljafari2023}; battery-assisted fast-charging hub management
+\cite{paudel2023}; coordinated energy trading and flexibility provision in
+local markets~\cite{ye2023}; and competitive fast-charging-station pricing
+games~\cite{yang2024}. None of these coordinates the tariffs of one network
+with the grid state of multiple \emph{other distribution networks} while
+retaining a closed-form demand-response baseline; the pairwise
+collaborative formulation~\cite{lepolesa2026} remains the closest
+predecessor and is the object extended here.
+
+\subsection{Spatial Choice, Distance, and Charging Behavior}
+EV owners choose charging locations as a spatial-choice problem. The
+gravity paradigm of Huff models the probability of patronizing a site as an
+increasing function of attractiveness and a decreasing function of
+distance, formalizing the ``friction of distance'' in
+consumer behavior~\cite{huff1964}. Charging-network planning applies these
+ideas directly: maximal-covering and accessibility models place stations
+where they serve the largest nearby demand at acceptable travel
+cost~\cite{frade2011}. At the control level, DRL formulations that embed
+user mobility behavior show that ignoring the coupling between tariff and
+travel choice degrades both demand shaping and
+profitability~\cite{yan2021tsg}. These results motivate the distance-decay
+weighting in Section~\ref{sec:framework}: if willingness to travel for a
+cheaper tariff decays with distance, then a distant network's influence on a
+balancing signal should decay accordingly.
+
+\subsection{Load Forecasting}
+All balancing strategies require forecasts of conventional load before
+pricing can act. Gradient-boosted decision trees--XGBoost~\cite{chen2016}
+and LightGBM~\cite{ke2017}--and random forests~\cite{breiman2001} dominate
+tabular load-forecasting benchmarks, while recurrent architectures such as
+LSTMs~\cite{hochreiter1997} capture sequential structure; probabilistic
+treatments and systematic evaluation practices are emphasized in recent
+tutorials~\cite{hong2016,wang2016recency}. The base framework uses boosting
+for this purpose~\cite{lepolesa2026}, and we retain that choice, using only
+the forecasted load as input to the demand-response and pricing stages.
+
+% ======================================================================
+\section{Problem Formulation and Preliminaries}\label{sec:prelim}
+
+\subsection{Network Model and Notation}
+Let $\mathcal{N}=\{1,\dots,N\}$ denote the set of distribution networks,
+each with rated capacity $C_{\max,i}$ and time-varying load $P_i(t)$. The
+instantaneous utilization of network $i$ is
+\begin{equation}\label{eq:util}
+  \util_i(t)=\frac{P_i(t)}{C_{\max,i}},\qquad \util_i(t)\in(0,1].
+\end{equation}
+Primary performance indicators used throughout are the time-averaged
+maximum--minimum utilization spread
+\begin{equation}\label{eq:imb}
+  \bar{I}=\frac{1}{T}\sum_{t=1}^{T}\Bigl(
+    \max_{i\in\mathcal{N}}\util_i(t)-\min_{i\in\mathcal{N}}\util_i(t)\Bigr),
+\end{equation}
+and the time-averaged cross-network utilization standard deviation
+\begin{equation}\label{eq:sid}
+  \bar{S}=\frac{1}{T}\sum_{t=1}^{T}s(t),\qquad
+  s(t)=\sqrt{\frac{1}{N-1}\sum_{i=1}^{N}\bigl(
+    \util_i(t)-\overline{\util}(t)\bigr)^2},
+\end{equation}
+where $\overline{\util}(t){=}\tfrac{1}{N}\sum_i\util_i(t)$. Table~\ref{tab:not}
+summarizes the symbols used in the remainder of the paper.
+
+\begin{table}[!t]
+\caption{Principal Notation.}
+\label{tab:not}
+\centering
+\begin{tabular}{ll}\toprule
+Symbol & Meaning \\ \midrule
+$\mathcal{N}$, $N$ & Network set and cardinality \\
+$C_{\max,i}$ & Rated capacity of network $i$ \\
+$P_i(t)$, $P_{\mathrm{net},i}(t)$ & Conventional and net load of network $i$ \\
+$\util_i(t)$ & Utilization of network $i$ \\
+$\D U_i(t)$ & Balancing signal of network $i$ \\
+$d_{ij}$, $W_{ij}$ & Haversine distance and willingness decay \\
+$\mu_i$ & Per-network EV demand scale \\[2pt]
+$\varepsilon(t)$ & Gaussian EV-demand perturbation \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Load Forecasting Module}
+Conventional load $P^{\mathrm{conv}}_i(t)$ is predicted hour ahead from
+lagged load and weather covariates using gradient-boosted trees trained as
+in the base framework~\cite{lepolesa2026,chen2016}. Forecast quality is
+assessed with the standard point-forecast metrics
+\begin{align}
+  \mathrm{MAE}_i&=\frac{1}{T}\sum_{t=1}^{T}\bigl|
+    P_i^{\mathrm{conv}}(t)-\hat P_i(t)
+    \bigr|,\label{eq:mae}\\
+  \mathrm{RMSE}_i&=\sqrt{\frac{1}{T}\sum_{t=1}^{T}\bigl(
+    P_i^{\mathrm{conv}}(t)-\hat P_i(t)\bigr)^2},\label{eq:rmse}
+\end{align}
+where $\hat P_i(t)$ denotes the forecast. The forecast column is the common
+input shared by every strategy compared in Section~\ref{sec:results}, so
+forecast error affects all baselines equally.
+
+\subsection{Closed-Form EV Demand Response (Base Formulation)}
+The base paper models EV charging demand as a direct, closed-form response
+to the network state, with no trained demand model
+\cite{lepolesa2026}. Let $\mu_i$ be the per-network EV demand scale
+($\mu_i=0.5\max_t\{D_i^{\mathrm{unc}}(t)\}$, half the unbalanced EV-demand
+peak, matching the reference implementation), and let
+$\norm{x}=\tfrac{x-\min x}{\max x-\min x}$ denote independent per-network
+min-max normalization applied to the entire $T$-sample. Under the
+peak-valley (PV) strategy the EV demand is
+\begin{equation}\label{eq:drpv}
+  D_i^{\mathrm{PV}}(t)=\mu_i\bigl(1-\norm{P_i(t)}\bigr)+\varepsilon(t),
+\end{equation}
+and under the peak-valley-with-balancing (PVB) strategy
+\begin{equation}\label{eq:drpvb}
+  D_i^{\mathrm{PVB}}(t)=\frac{\mu_i}{2}\Bigl[
+    \bigl(1-\norm{P_i(t)}\bigr)
+    +\bigl(1-\norm{\D U_i(t)}\bigr)\Bigr]+\varepsilon(t),
+\end{equation}
+where $\D U_i(t)$ is the balancing signal defined below and
+$\varepsilon(t)$ is a small Gaussian perturbation representing
+prediction/behavior noise. The resulting grid load is
+$P_i(t)+D_i(t)$, and the per-network PAR over the horizon is
+\begin{equation}\label{eq:par}
+  \mathrm{PAR}_i=
+  \frac{\max_{t\in[1,T]}\bigl[P_i(t)+D_i(t)\bigr]}
+  {\frac{1}{T}\sum_{t=1}^{T}\bigl[P_i(t)+D_i(t)\bigr]}.
+\end{equation}
+
+\subsection{Base Two-Network Balancing}
+For the two-network case $N{=}2$, the balancing signal of the base
+formulation is the clipped pairwise utilization difference
+\begin{equation}\label{eq:pairwise}
+  \D U_{i}(t)=\max\bigl(\util_i(t)-\util_j(t),\,0\bigr),\qquad j\ne i.
+\end{equation}
+Network $i$ is induced to export demand to $j$ whenever it is more loaded
+than $j$; the clip prevents negative balancing signals from reversing the
+incentive. This pairwise construction is the object generalized in
+Section~\ref{sec:framework}.
+
+\subsection{Problem Statement}
+We seek, for arbitrary $N\ge2$, pricing strategies $p_i(t)$ that minimize
+the cross-network imbalance $\bar I$ (2) while preserving per-network
+valley-filling. Three subproblems are posed, corresponding to the three
+gaps in the base formulation.
+\begin{itemize}
+  \item \textbf{P1 (Scalability).} Construct a balancing signal
+        $\D U_i(t)$ for arbitrary $N$ that reduces exactly to
+        (\ref{eq:pairwise}) when $N{=}2$.
+  \item \textbf{P2 (Spatial friction).} Incorporate real geographic
+        distance so that the influence of network $j$ on the balancing
+        signal of network $i$ decays with $d_{ij}$.
+  \item \textbf{P3 (Renewables).} Reformulate $P_i(t)$ in the demand
+        equations using a renewable-adjusted net load that retains the
+        closed-form structure of (\ref{eq:drpv})--(\ref{eq:drpvb}).
+\end{itemize}
+
+% ======================================================================
+\section{Proposed Framework}\label{sec:framework}
+
+\subsection{System Architecture}
+Fig.~\ref{fig:arch} shows the overall architecture. For each network a
+forecast module produces $\hat P_i^{\mathrm{conv}}(t)$; a renewable module
+displaces it into net load $P_{\mathrm{net},i}(t)$
+(Section~\ref{sec:renewables}); the generalized, distance-weighted
+balancing signal $\D U_{i,\mathrm{dist}}(t)$ (Sections~\ref{sec:gen} and
+\ref{sec:decay}) is constructed from the net-load utilizations; and the
+closed-form EV demand---and, for dynamic pricing, the collaborative DDPG
+tariff $p_i(t)$---closes the loop.
+
+\begin{figure}[!t]
+\centering
+\begin{tikzpicture}[
+  >=Stealth,
+  font=\scriptsize,
+  inp/.style={draw=black!65, rounded corners=2pt, align=center, inner sep=4pt,
+              fill=black!5, minimum width=2.6cm},
+  proc/.style={draw=black!65, rounded corners=2pt, align=center, inner sep=5pt,
+               fill=black!13, minimum width=5.9cm},
+  out/.style={draw=black!65, rounded corners=2pt, align=center, inner sep=5pt,
+              fill=black!4, minimum width=5.9cm},
+  arr/.style={->, >=Stealth[length=2.3mm,width=2.0mm], line width=0.7pt},
+  stg/.style={font=\tiny\bfseries, gray!50}
+]
+\node[font=\tiny\itshape, gray!70] at (0,3.4)
+  {For each network $i\in\{1,\dots,N\}$};
+\node[inp] (fc) at (-1.9,2.35) {Conventional load\\forecast (GBM)};
+\node[inp] (ren) at (1.9,2.35) {Renewable generation\\(PV 18\%, wind law)};
+\node[proc] (net) at (0,0.85) {Net load and utilization\\$u_i(t)=P_{\mathrm{net},i}(t)/C_{\max,i}$};
+\node[proc] (bal) at (0,-0.95) {Distance-aware balancing signal\\$\D U_{i,\mathrm{dist}}(t)$\ (arbitrary $N$, Haversine $W_{ij}$)};
+\node[proc] (dem) at (0,-2.75) {Closed-form EV demand and tariff\\$D_i^{\mathrm{FULL}}(t)$\ under
+  $p_i{=}p_{\mathrm{conv}}{+}\tfrac12(a_{\mathrm{P1},i}{+}a_{\mathrm{P2},i})$};
+\node[out] (met) at (0,-4.55) {Reporting\\$\bar I$, $\bar S$, per-network PAR, paired $t$-test};
+\draw[arr] (fc) -- (net);
+\draw[arr] (ren) -- (net);
+\draw[arr] (net) -- (bal);
+\draw[arr] (bal) -- (dem);
+\draw[arr] (dem) -- (met);
+\node[stg] at (-4.05,0.9) {1};
+\node[stg] at (-4.05,-0.9) {2};
+\node[stg] at (-4.05,-2.7) {3};
+\node[stg] at (-4.05,-4.5) {4};
+\end{tikzpicture}
+\caption{System architecture of the generalized framework. Stage~1:
+forecasting and on-site renewables reduce the feeder load to a renewable
+net load $P_{\mathrm{net},i}(t)$. Stage~2: a distance-weighted balancing
+signal aggregates all $N$ networks. Stage~3: closed-form demand response is
+priced by collaborative DDPG tariffs. Stage~4: metrics are reported. Only
+the balancing signal and the load variable change between PV, PVB\_OLD,
+PVB\_NEW, and PVB\_FULL.}
+\label{fig:arch}
+\end{figure}
+
+Forecast, balancing, and demand modules are computed from the same
+closed-form equations for every compared strategy; only the construction of
+the balancing signal and the load variable changes between PV, PVB\_OLD,
+PVB\_NEW, and PVB\_FULL. This guarantees that all differences reported in
+Section~\ref{sec:results} are attributable to the three extensions alone.
+
+\subsection{Contribution 1: Generalized $N$-Network Balancing}\label{sec:gen}
+For arbitrary $N\ge2$, network $i$ is compared against the mean utilization
+of all other networks rather than a single partner:
+\begin{equation}\label{eq:gen}
+  \D U_i(t)=\max\Bigl(\util_i(t)-\frac{1}{N-1}\sum_{j\ne i}\util_j(t),\,
+    0\Bigr).
+\end{equation}
+
+\begin{proposition}[Backward compatibility]\label{prop:n2}
+For $N=2$, (\ref{eq:gen}) reduces exactly to the base pairwise signal
+(\ref{eq:pairwise}).
+\end{proposition}
+\begin{IEEEproof}
+With $N=2$, the single-neighbor mean in (\ref{eq:gen}) collapses to
+$\tfrac{1}{2-1}\util_j(t)=\util_j(t)$ for the one network $j\ne i$, so
+$\D U_i(t)=\max(\util_i(t)-\util_j(t),0)$, identical to
+(\ref{eq:pairwise}).
+\end{IEEEproof}
+
+The reduction is additionally verified in code: the companion notebook
+asserts, with $\texttt{np.allclose}$, that the generalized function and the
+base pairwise function produce identical balancing signals at absolute
+tolerance $10^{-7}$ on the canonical inputs (Appendix~\ref{app:equiv}).
+This dual verification guards against the algebraic argument alone.
+
+\subsection{Contribution 2: Spatial Distance Decay}\label{sec:decay}
+The base formulation implicitly assumes infinite willingness to travel to
+any other network. We replace that assumption with a real-geography,
+gravity-style decay~\cite{huff1964}. Each network is placed at the centroid
+$(\phi_i,\lambda_i)$ of its zone, and the great-circle distance between two
+networks is computed with the Haversine formula
+\begin{equation}\label{eq:hav}
+  d_{ij}=2R\arcsin\!\Bigl(\sqrt{
+    \sin^2\!\tfrac{\D\phi_{ij}}{2}
+    +\cos\phi_i\cos\phi_j\,\sin^2\!\tfrac{\D\lambda_{ij}}{2}}\Bigr),
+\end{equation}
+with $R=6371~\mathrm{km}$. Driver willingness to shift charging from $i$ to
+$j$ decays exponentially with distance,
+\begin{equation}\label{eq:w}
+  W_{ij}=\exp(-\alpha\,d_{ij}),\qquad W_{ii}=0,\qquad \alpha=0.15\,\mathrm{km^{-1}},
+\end{equation}
+and the balancing signal replaces the unweighted mean in
+(\ref{eq:gen}) with the row-normalized weighted mean
+\begin{equation}\label{eq:dist}
+  \D U_{i,\mathrm{dist}}(t)=\max\Bigl(\util_i(t)-\sum_{j\ne i}
+   \frac{W_{ij}}{\sum_{k\ne i}W_{ik}}\,\util_j(t),\,
+   0\Bigr).
+\end{equation}
+For $\alpha\to0$, (\ref{eq:dist}) degenerates smoothly to the unweighted
+mean of (\ref{eq:gen}); for $\alpha\to\infty$, it degenerates to the
+nearest-neighbor pairwise signal. Table~\ref{tab:dist} lists the pairwise
+distances used here; all are typical of an intra-city topology.
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\caption{Haversine Distance Matrix Between Zone Centroids (km).}
+\label{tab:dist}
+\centering
+\begin{tabular}{lcccc}\toprule
+ & Res. & Com. & Ind. & Inst. \\ \midrule
+Residential    & 0    & 1.16 & 5.52 & 1.54 \\
+Commercial     & 1.16 & 0    & 5.15 & 2.28 \\
+Industrial     & 5.52 & 5.15 & 0    & 7.06 \\
+Institutional  & 1.54 & 2.28 & 7.06 & 0    \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Contribution 3: Renewable Net-Load Integration}\label{sec:renewables}
+The public dataset supplies hourly global and diffuse irradiance components
+and wind speed alongside conventional load
+\cite{salam2018}. Rather than importing an external scenario, we derive
+renewable generation from these measured columns. Solar photovoltaic
+generation is a linear irradiance-PV-aperture model,
+\begin{equation}\label{eq:solar}
+  P_{\mathrm{solar},i}(t)=G(t)\,A_{\mathrm{PV},i}\,\eta_{\mathrm{PV}},
+\end{equation}
+where $G(t)$ is the total (direct$+$diffuse) in-plane irradiance
+($\mathrm{W/m^2}$), $A_{\mathrm{PV},i}$ the rooftop aperture assumed for
+network $i$, and $\eta_{\mathrm{PV}}=18\%$ the panel efficiency. Wind
+generation follows a clipped cubic power curve
+\begin{equation}\label{eq:wind}
+P_{\mathrm{wind},i}(t)=
+\begin{cases}
+0, & v(t)<v_{\mathrm{cutin}}\ \text{or}\ v(t)\ge v_{\mathrm{cutout}},\\[2pt]
+\tfrac12\rho A_{\mathrm{rotor}}C_p\,v(t)^3\,n_i,\;
+    & v_{\mathrm{cutin}}\le v(t)<v_{\mathrm{rated}},\\[2pt]
+P_{\mathrm{rated}}\,n_i,\; & v_{\mathrm{rated}}\le v(t)<v_{\mathrm{cutout}},
+\end{cases}
+\end{equation}
+with air density $\rho=1.225~\mathrm{kg/m^3}$, power coefficient
+$C_p=0.35$, $n_i$ turbines per network, cut-in
+$v_{\mathrm{cutin}}=1.5\,\mathrm{m/s}$, rated
+$v_{\mathrm{rated}}=9.0\,\mathrm{m/s}$, and cut-out
+$v_{\mathrm{cutout}}=20.0\,\mathrm{m/s}$ (values matching the codebase;
+earlier documentation that used $3/12~\mathrm{m/s}$ has been corrected).
+The renewable-adjusted net load, subject to a $5\%$ baseload floor that
+prevents an unrealistic zero-load condition during peak midday generation,
+is
+\begin{equation}\label{eq:net}
+  P_{\mathrm{net},i}(t)=\max\Bigl(0.05\,P_{\mathrm{conv},i}(t),\;
+    P_{\mathrm{conv},i}(t)-P_{\mathrm{solar},i}(t)-P_{\mathrm{wind},i}(t)\Bigr).
+\end{equation}
+High PV penetration is known to reshape feeder net-load and voltage
+envelopes in precisely this way~\cite{hoke2013}, motivating the
+net-load-centric reformulation.
+
+\paperfig[\columnwidth]{fig3_net_load_profiles.png}%
+{Conventional versus renewable-adjusted net load for the four test networks
+on the canonical 24-h window.}%
+{fig:netload}
+
+\subsection{EV Demand Response under the Combined Framework}
+PVB\_FULL is obtained by substituting net load for conventional load and the
+distance-weighted net-load signal for $\D U_i$ in the closed-form PVB
+equation:
+\begin{equation}\label{eq:full}
+\begin{aligned}
+D_i^{\mathrm{FULL}}(t)=\frac{\mu_i}{2}\Bigl[&
+  \bigl(1-\norm{P_{\mathrm{net},i}(t)}\bigr)\\
+  &+{\bigl(1-\norm{\D U_{i,\mathrm{dist}}(t)}\bigr)}\Bigr]
+  +\varepsilon(t),
+\end{aligned}
+\end{equation}
+with $\D U_{i,\mathrm{dist}}$ computed from net-load utilizations.
+Equations (\ref{eq:drpv}) and (\ref{eq:drpvb}) remain the definitions of the
+PV and PVB\_OLD baselines, so the four strategies differ only through the
+extensions.
+
+\subsection{Collaborative DDPG Dynamic Pricing}\label{sec:framework-ddpg}
+For dynamic retail pricing each network is assigned two DDPG
+actor--critic pairs~\cite{lillicrap2016}, following the base
+architecture~\cite{lepolesa2026}. Agent P1 targets the network's own
+normalized net load with a mean-absolute-error (MAE) reward; agent P2
+targets the normalized distance-weighted balancing signal with an MAE
+reward. Actors use a $24{-}64{-}64{-}24$ feedforward network with ReLU
+activations and a scaled-tanh output bounded to $[0,1]$; critics use
+$48{-}64{-}64{-}1$ networks over the concatenated state--action vector, and
+all networks are optimized with Adam~\cite{kingma2015}. The final hourly
+tariff is the convex combination
+\begin{equation}\label{eq:price}
+  p_i(t)=p_{\mathrm{conv}}(t)
+       +\tfrac12\,a_{\mathrm{P1},i}(t)
+       +\tfrac12\,a_{\mathrm{P2},i}(t),
+\end{equation}
+where $p_{\mathrm{conv}}(t)$ is the conventional retail tariff.
+
+\subsubsection*{Evaluation Protocol and the Role of DDPG}
+Consistent with the base paper's reported methodology (verified against its
+public reference code), the headline utilization metrics in
+Section~\ref{sec:results} are computed from the closed-form demand equations
+above; the DDPG actions enter only through the tariff $p_i(t)$ used to
+construct the demand. The learned pricing policy is evaluated separately: it
+is retrained from scratch over four training seeds and its run-to-run
+tariff variability is reported (Section~\ref{sec:ddpg-rob}). This two-tier
+separation is a faithful match to the base method~\cite{lepolesa2026}, not an
+implementation shortcut.
+
+% ======================================================================
+\section{Experimental Setup}\label{sec:setup}
+
+\subsection{Testbed and Data}
+Residential and commercial load profiles are the real hourly series used by
+the base paper: $8{,}736$ hours of Tetouan, Morocco, distribution telemetry
+(residential feeder) together with a real commercial feeder series and the
+base paper's EV-demand columns, all from the public Tetouan smart-grid
+dataset~\cite{salam2018}. Industrial and institutional profiles are
+synthesized by re-weighting the real residential series with distinct
+diurnal envelopes--a continuous day-shift plateau from $06{:}00$ to $18{:}00$
+for industrial and a bimodal university/hospital schedule
+($08{:}00$--$12{:}00$, $14{:}00$--$17{:}00$) for institutional--following
+the same class of profile construction the base paper applies to its
+synthetic EV demand. Rated capacities are $1.167$, $1.0$, $1.5$, and $0.8$
+MW for the residential, commercial, industrial, and institutional networks,
+respectively. Zone centroids are placed within the city of Tetouan, giving
+the pairwise distances of Table~\ref{tab:dist}.
+
+\begin{figure}[!t]
+\centering
+\begin{tikzpicture}[
+  >=Stealth,
+  font=\scriptsize,
+  st/.style={draw=black!65, rounded corners=2pt, align=center, inner sep=5pt,
+             minimum width=6.6cm},
+  arr/.style={->, >=Stealth[length=2.3mm,width=2.0mm], line width=0.7pt,
+              shorten >=2pt}
+]
+\node[st,fill=black!5] (s0) at (0,2.9)
+  {Stage 0 --- data acquisition\\Tetouan 10-min telemetry, EV demand,
+  solar/wind columns};
+\node[st,fill=black!13] (s1) at (0,1.6)
+  {Stage 1 --- conventional load forecast\\GBM/XGBoost day-ahead
+  $\hat P_i^{\mathrm{conv}}(t)$};
+\node[st,fill=black!13] (s2) at (0,0.3)
+  {Stage 2 --- renewable net load\\$P_{\mathrm{net},i}(t)$ with $5\%$
+  baseload floor};
+\node[st,fill=black!13] (s3) at (0,-1.0)
+  {Stage 3 --- generalized balancing signal\\$\D U_{i,\mathrm{dist}}(t)$,
+  $\alpha=0.15~\mathrm{km^{-1}}$};
+\node[st,fill=black!4] (s4) at (0,-2.3)
+  {Stage 4 --- evaluation\\closed-form $D_i(t)$ $+$ DDPG
+  $p_i(t)$ $\to$ $\bar I$, $\bar S$, PAR, paired $t$-test};
+\draw[arr] (s0)--(s1);
+\draw[arr] (s1)--(s2);
+\draw[arr] (s2)--(s3);
+\draw[arr] (s3)--(s4);
+\end{tikzpicture}
+\caption{Evaluation and training pipeline from raw telemetry to the
+reported metrics (Stage 0--4 of the companion notebook).}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Evaluation Protocol}
+We report $\bar I$ (2), $\bar S$ (3), and per-network PAR
+(\ref{eq:par}). Strategies are evaluated on the canonical $24$-hour window
+at hour $576$ of the annual series (the base paper's own test index) and,
+for the seasonal study, on three additional windows from spring
+(hr~$2400$), summer (hr~$4800$), and autumn (hr~$7200$), under two EV-fleet
+scaling assumptions (fixed annual $\mu_i$ vs.\ per-window recomputed
+$\mu_i$). Five fixed inference-noise seeds
+$\{42,101,2024,777,999\}$ quantify closed-form sensitivity to
+$\varepsilon(t)$; these are separate from the four DDPG training seeds
+$\{42,7,123,2025\}$, since the two seed sets control distinct sources of
+variability. All numbers reported in the tables are the canonical outputs of
+the companion notebook (files in \texttt{data/}).
+
+% ======================================================================
+\section{Results and Discussion}\label{sec:results}
+
+\subsection{Headline Strategy Benchmark}
+Table~\ref{tab:bench} compares PV, PVB\_OLD (the pairwise formula applied to
+four networks), PVB\_NEW (generalized $N$-network balancing alone,
+Contribution~1), and PVB\_FULL (all three contributions). PVB\_FULL reduces
+the maximum--minimum imbalance by $19.03\%$ relative to PV and by $15.28\%$
+relative to PVB\_OLD; the time-averaged cross-network utilization standard
+deviation falls from $0.1152$ to $0.0901$, a $21.81\%$ reduction. The
+observed standard deviations over the five inference seeds are two orders of
+magnitude below the strategy differences, so the ranking is robust to the
+closed-form demand noise.
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Headline Strategy Benchmark (mean${\pm}$std over 5 inference seeds,
+canonical 24-h window).}
+\label{tab:bench}
+\centering
+\begin{tabular}{lccc}\toprule
+Strategy & $\bar I$ & $\bar S$ & Mean PAR \\ \midrule
+PV        & $0.2729{\pm}0.0008$ & $0.1152{\pm}0.0003$ & $1.344{\pm}0.010$ \\
+PVB\_OLD  & $0.2608{\pm}0.0001$ & $0.1116{\pm}0.0001$ & $1.335{\pm}0.001$ \\
+PVB\_NEW  & $0.2544{\pm}0.0001$ & $0.1044{\pm}0.0001$ & $1.378{\pm}0.001$ \\
+PVB\_FULL & $0.2210{\pm}0.0001$ & $0.0901{\pm}0.0001$ & $1.416{\pm}0.002$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\paperfig[\columnwidth]{fig4_imbalance_by_strategy.png}%
+{Time series of the per-hour maximum--minimum utilization envelope for the
+four strategies, averaged over the five inference seeds with the seed
+min--max range shaded. Every point reproduces the Stage-4 canonical
+evaluation.}%
+{fig:imbalance}
+
+\subsection{Ablation Study}
+Table~\ref{tab:abl} isolates each extension's marginal contribution by
+evaluating four nested configurations. Renewable net-load integration
+(Contribution~3) accounts for nearly all of the combined gain
+($-12.88\%$), while spatial distance decay (Contribution~2) contributes a
+modest but consistent $-0.30\%$. The asymmetry is expected at intra-city
+distances of $1.16$--$7.06$~km: transit time is short relative to the
+several-hundred-kilowatt midday load removed by on-site generation.
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Four-Way Ablation Study ($\bar I$, 5-seed mean).}
+\label{tab:abl}
+\centering
+\begin{tabular}{lccc}\toprule
+Configuration & $\bar I$ & Marginal $\D$ & Marginal \% \\ \midrule
+(a) Gap 1 only            & 0.2544 & ---    & --- \\
+(b) Gap 1 $+$ Gap 2       & 0.2536 & $-0.0008$ & $-0.30\%$ \\
+(c) Gap 1 $+$ Gap 3       & 0.2216 & $-0.0328$ & $-12.88\%$ \\
+(d) All three (PVB\_FULL) & 0.2210 & $-0.0334$ & $-13.13\%$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\paperfig[\columnwidth]{fig5_ablation_contributions.png}%
+{Ablation: $\bar I$ for configurations (a)--(d), with the marginal change
+relative to (a) shown above each bar. Values are the canonical 5-seed
+outputs of Table~\ref{tab:abl}.}%
+{fig:ablation}
+
+\subsection{Statistical Significance}
+A paired $t$-test comparing PVB\_OLD and PVB\_FULL over the five
+inference-noise seeds uses the statistic
+\begin{equation}\label{eq:ttest}
+  t=\frac{\bar d}{s_d/\sqrt{n}},\qquad
+  d_k=\bar I_k^{\mathrm{PVB\_OLD}}-\bar I_k^{\mathrm{PVB\_FULL}},
+  \quad k=1,\dots,5,
+\end{equation}
+and yields a mean reduction of $\bar d=0.039840$
+(95\% CI $[0.039832,0.039849]$, $t=12653.6$, $p=2.34\times10^{-16}$). We
+emphasize what this interval means: it characterizes sensitivity to the
+small Gaussian perturbation $\varepsilon(t)$ applied to an otherwise
+deterministic closed-form formula, i.e., consistency across demand-noise
+realizations. It does \emph{not} represent inter-grid stochastic
+variability, which the closed-form model does not simulate; DDPG training
+variability is treated separately in Section~\ref{sec:ddpg-rob}.
+
+\subsection{Seasonal Generalization}
+Tables~\ref{tab:season} and~\ref{tab:seasonb} report the two EV-fleet
+scaling assumptions (Case~A: fixed annual $\mu_i$; Case~B: $\mu_i$
+recomputed from each season's conventional peak). The ordering
+$\mathrm{PV}>\mathrm{PVB\_OLD}>\mathrm{PVB\_NEW}>\mathrm{PVB\_FULL}$ holds
+in all eight evaluations, with reductions of $16.5$--$19.0\%$ versus PV and
+$11.4$--$15.3\%$ versus PVB\_OLD across the full set.
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Seasonal Generalization of $\bar I$ --- Case A (fixed annual
+$\mu_i$).}
+\label{tab:season}
+\centering
+\begin{tabular}{lcccc}\toprule
+Season & PV & PVB\_OLD & PVB\_NEW & PVB\_FULL \\ \midrule
+Winter & 0.2729 & 0.2608 & 0.2544 & 0.2210 \\
+Spring & 0.2643 & 0.2491 & 0.2417 & 0.2206 \\
+Summer & 0.3209 & 0.3016 & 0.2945 & 0.2645 \\
+Autumn & 0.2556 & 0.2418 & 0.2324 & 0.2088 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Seasonal Generalization of $\bar I$ --- Case B (per-window
+recomputed $\mu_i$).}
+\label{tab:seasonb}
+\centering
+\begin{tabular}{lcccc}\toprule
+Season & PV & PVB\_OLD & PVB\_NEW & PVB\_FULL \\ \midrule
+Winter & 0.2729 & 0.2608 & 0.2544 & 0.2210 \\
+Spring & 0.2672 & 0.2522 & 0.2438 & 0.2230 \\
+Summer & 0.3327 & 0.3114 & 0.3041 & 0.2754 \\
+Autumn & 0.2588 & 0.2456 & 0.2357 & 0.2126 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\paperfig[\columnwidth]{fig6_seasonal_results.png}%
+{Seasonal generalization of $\bar I$ for Case A (fixed annual $\mu_i$) and
+Case B (per-season $\mu_i$); each group shows PV, PVB\_OLD, PVB\_NEW, and
+PVB\_FULL, matching Tables~\ref{tab:season} and~\ref{tab:seasonb}.}%
+{fig:seasonal}
+
+\subsection{DDPG Pricing-Policy Robustness}\label{sec:ddpg-rob}
+Because the headline metrics are closed-form, DDPG training variability is
+evaluated directly on the learned tariff. All eight collaborative agents
+were retrained from scratch over the four training seeds
+$\{42,7,123,2025\}$. Table~\ref{tab:ddpg} reports that learned tariffs show
+$6.7$--$13.0\%$ relative standard deviation across training runs while
+consistently taxing morning/evening peak hours and discounting midday hours
+that coincide with peak solar availability in every run.
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\caption{DDPG Tariff Variability Across Four Training Seeds.}
+\label{tab:ddpg}
+\centering
+\begin{tabular}{lcccc}\toprule
+Network & Mean tariff & Mean seed std & Max seed std & Rel.\ var. \\ \midrule
+Residential    & 0.950 & 0.123 & 0.275 & $13.0\%$ \\
+Commercial     & 0.938 & 0.113 & 0.320 & $12.1\%$ \\
+Industrial     & 1.030 & 0.094 & 0.247 & $9.1\%$ \\
+Institutional  & 0.953 & 0.064 & 0.191 & $6.7\%$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\paperfig[\columnwidth]{fig7_ddpg_prices.png}%
+{Representative learned dynamic tariffs $p_i(t)$ of the canonical policy
+for the four networks over the 24-h horizon, together with the conventional
+tariff.}%
+{fig:ddpg}
+
+\subsection{Peak-to-Average Ratio Decomposition}\label{sec:par}
+PAR increases slightly under PVB\_FULL despite falling peaks. Table
+\ref{tab:par} decomposes the cause per network: absolute peak demand falls
+in every network, but midday solar generation depresses the daily mean load
+(the PAR denominator) by $5.7$--$10.8\%$, more than it reduces the
+non-solar residual peak (the numerator, cut by only $0.3$--$9.3\%$).
+Because the denominator falls faster than the numerator, PAR rises while
+absolute peaks and cross-network imbalance improve--consistent with
+distribution grids carrying distributed photovoltaics without stationary
+storage.
+
+\begin{table}[!t]
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Per-Network Peak and PAR Decomposition (PV vs.\ PVB\_FULL).}
+\label{tab:par}
+\centering
+\begin{tabular}{lccc}\toprule
+Network & PV peak & FULL peak & PAR (PV$\to$FULL) \\ \midrule
+Residential   & 650.6\,kW & 648.3\,kW & 1.152$\to$1.222 \\
+Commercial    & 556.8\,kW & 545.3\,kW & 1.132$\to$1.176 \\
+Industrial    & 1322.5\,kW & 1287.2\,kW & 1.456$\to$1.587 \\
+Institutional & 787.8\,kW & 714.5\,kW & 1.654$\to$1.673 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\paperfig[\columnwidth]{fig8_par_decomposition.png}%
+{Per-network peak total load (kW, bars) and peak-to-average ratio
+(markers, right axis) under PV vs.\ PVB\_FULL, matching
+Table~\ref{tab:par}; PAR values use the canonical seed-42 evaluation.}%
+{fig:par}
+
+\subsection{An Inherited Structural Limitation}\label{sec:inherited}
+Across all four networks the PVB/PVB\_FULL EV-demand peak is reduced
+relative to the uncoordinated EV baseline by a nearly identical margin
+($\approx44.5\%$ with respect to the unbalanced EV peak), despite the
+networks' distinct diurnal shapes. Reproducing the base paper's own
+two-network computation from its data and code gives the same uniformity:
+the EV peak under PVB is a near-constant fraction ($\approx0.83$, within one
+percentage point across the two networks) of the PV EV peak. The cause is
+structural: independent per-network min-max normalization collapses
+network-specific magnitude information before the demand equation is
+applied, and the scale $\mu_i$ then re-scales each network by a fixed
+fraction of its own unbalanced peak. The resulting EV peak reduction is
+therefore approximately scale-invariant across networks. We document this as
+a limitation \emph{inherited} from the base formulation rather than
+introduced by our $N$-network, distance, or renewable extensions.
+
+\paperfig[\columnwidth]{fig9_ev_peak_uniformity.png}%
+{EV demand peak under PVB\_FULL as a fraction of the unbalanced EV peak for
+each network--the near-uniform ($\approx$44--45\%) reduction inherited from
+the base min--max normalization.}%
+{fig:uniformity}
+
+% ======================================================================
+\section{Discussion}\label{sec:disc}
+
+\subsection{Role and Scope of Distance Decay}
+The measured contribution of distance decay ($-0.30\%$) quantifies spatial
+friction at the specific scale tested ($1.16$--$7.06$~km). In such an
+intra-city setting transit time is short, so the effect is small but
+consistent and directionally correct. In larger metropolitan or multi-city
+topologies, where travel time materially changes station choice
+\cite{frade2011}, the term is expected to grow; the fitting of
+$\alpha=0.15~\mathrm{km^{-1}}$ from revealed charging data is a natural
+extension that we leave to future work.
+
+\subsection{Inherited Normalization Limitation and Its Consequences}
+The uniformity documented in Section~\ref{sec:inherited} is a genuine
+property of the base demand equation, not an artifact of our
+implementation. It means that the closed-form EV response is informative
+about \emph{when} to move demand but weakly informative about \emph{which}
+network carries the marginal kilowatt. The grid-utilization improvements
+we report are nonetheless real, because the balancing signal itself
+operates on raw utilizations whose scale information is preserved; only the
+EV-demand *response* is scale-collapsed. A redesign that normalizes a
+stacked multi-network vector jointly---or that preserves per-network
+magnitudes through an affine, rather than min-max, transform---is the most
+promising route to sharper cross-network shaping and is prioritized in
+future work.
+
+\subsection{Threats to Validity}
+Residential and commercial loads and all meteorological inputs are real
+Tetouan measurements; industrial and institutional profiles are synthetic,
+constructed by re-weighting the real residential series. The statistical
+test quantifies closed-form demand-noise sensitivity, not operational
+stochasticity. The per-network PAR analysis inherits the assumption of no
+stationary storage or export limits. Finally, the base paper's own data are
+used for the inheritance analysis; we could not independently re-run its
+DDPG training within this study's compute budget, so that portion of the
+inheritance claim rests on re-computation with its reference implementation.
+
+% ======================================================================
+\section{Conclusion and Future Work}\label{sec:conc}
+This paper extended a two-network collaborative DDPG EV charging pricing
+framework along three directions: an exact, backward-compatible
+generalization to arbitrary $N$ networks; a Haversine-distance exponential
+decay governing cross-network driver willingness; and physics-based
+solar/wind integration through a renewable-adjusted net load. On a
+four-network Tetouan-grounded testbed, the combined framework reduced
+cross-network utilization imbalance by $19.03\%$ relative to uncoordinated
+pricing and by $15.28\%$ relative to the original pairwise formulation,
+with the ranking preserved across four seasons, five inference-noise seeds,
+and four DDPG training seeds. Ablation attributes most of the gain to
+renewable net-load integration; generalization and distance awareness
+contribute smaller, consistent improvements. We further documented, and
+attributed to the base formulation, a structural EV peak-uniformity
+property caused by independent min-max normalization.
+
+Future work includes: (i) validation on additional real multi-feeder
+telemetry; (ii) distance-decay studies on larger multi-city topologies
+with calibrated $\alpha$; (iii) a redesigned demand-response equation that
+preserves cross-network load-shape information; and (iv) extending the
+statistical evaluation from inference-noise seeds to retrained DDPG
+ensembles across a full annual cycle.
+
+% ======================================================================
+\section*{Acknowledgment}
+Placeholder: add the AI-assistance disclosure and funding statements required
+by the target venue's author guidelines before submission.
+
+% ======================================================================
+\appendix
+\section{Numerical Equivalence Verification}\label{app:equiv}
+To guard against relying on the algebraic argument of
+Proposition~\ref{prop:n2} alone, the companion notebook verifies the
+reduction numerically. The generalized function is called with $N=2$ and
+its output is compared against the base pairwise function on the canonical
+inputs.
+
+\begin{algorithm}[H]
+\caption{Numerical backward-compatibility check}
+\begin{algorithmic}[1]
+\State \textbf{input:} balancing functions $f_{\mathrm{pw}}$, $f_{\mathrm{gen}}$, load matrix $\mathbf{P}\in\mathbb{R}^{T\times2}$
+\For{$t=1,\dots,T$}
+  \State $s^{\mathrm{pw}}_1 \gets f_{\mathrm{pw}}(\util_1(t),\util_2(t))$
+  \State $s^{\mathrm{gen}}_1 \gets f_{\mathrm{gen}}(\util_1(t),\util_2(t))$
+\EndFor
+\State \Return $\texttt{np.allclose}(s^{\mathrm{pw}}, s^{\mathrm{gen}},
+\texttt{atol}=10^{-7})$
+\end{algorithmic}
+\end{algorithm}
+
+%\section{Notebook Reproducibility}
+%All tables are produced from the canonical notebook outputs in
+%\texttt{data/} (files named \texttt{*\_canonical.csv}). Headline, ablation,
+%and seasonal tables use the 5-seed inference protocol; the DDPG-robustness
+%table uses the 4-seed training protocol.
+
+% ======================================================================
+\begin{thebibliography}{99}\IEEEoverridecommandlockouts%
+
+\bibitem{lepolesa2026}
+L. J. Lepolesa, K. E. Adetunji, K. Ouahada, Z. Liu, and L. Cheng,
+``Dynamic electric vehicle charging pricing for load balancing in power
+distribution networks based on collaborative DDPG agents,''
+\emph{IEEE Trans. Smart Grid}, vol. 17, no. 4, pp. 3342--3353, Jul. 2026.
+
+\bibitem{bailey2025}
+M. R. Bailey, D. P. Brown, E. Myers, B. Shaffer, and F. A. Wolak,
+``Electric vehicles and the energy transition: Unintended consequences of
+time-of-use pricing,''
+\emph{American Economic Review: Insights}, vol. 7, no. 4, pp. 550--566, 2025.
+
+\bibitem{samende2025}
+C. Samende, A. Akshaya, S. M. Bhagavathy, J. Melone, R. H. Snape, and
+K. Stewart,
+``Herding from uncoordinated smart charging of EVs: A real-life
+demonstration,''
+in \emph{Proc. IEEE PES ISGT Europe}, 2025.
+
+\bibitem{jones2022}
+C. B. Jones, W. Vining, M. Lave, T. Haines, C. Neuman, J. Bennett,
+\emph{et al.},
+``Impact of electric vehicle customer response to time-of-use rates on
+distribution power grids,''
+\emph{Energy Reports}, vol. 8, 2022.
+
+\bibitem{faruqui2010}
+A. Faruqui and S. Sergici,
+``Household response to dynamic pricing of electricity: A survey of 15
+experiments,''
+\emph{J. Regulatory Economics}, vol. 38, no. 2, pp. 193--225, 2010.
+
+\bibitem{borenstein2005}
+S. Borenstein,
+``The long-run efficiency of real-time electricity pricing,''
+\emph{The Energy Journal}, vol. 26, no. 3, pp. 93--116, 2005.
+
+\bibitem{clement2010}
+K. Clement-Nyns, E. Haesen, and J. Driesen,
+``The impact of charging plug-in hybrid electric vehicles on a residential
+distribution grid,''
+\emph{IEEE Trans. Power Syst.}, vol. 25, no. 1, pp. 371--380, 2010.
+
+\bibitem{richardson2012tsg}
+P. Richardson, D. Flynn, and A. Keane,
+``Local versus centralized charging strategies for electric vehicles in low
+voltage distribution systems,''
+\emph{IEEE Trans. Smart Grid}, vol. 3, no. 2, pp. 1020--1028, 2012.
+
+\bibitem{richardson2012tpwrs}
+P. Richardson, D. Flynn, and A. Keane,
+``Optimal charging of electric vehicles in low-voltage distribution
+systems,''
+\emph{IEEE Trans. Power Syst.}, vol. 27, no. 1, pp. 268--279, 2012.
+
+\bibitem{oconnell2014}
+A. O'Connell, D. Flynn, and A. Keane,
+``Rolling multi-period optimization to control electric vehicle charging in
+distribution networks,''
+\emph{IEEE Trans. Power Syst.}, vol. 29, no. 1, pp. 340--348, 2014.
+
+\bibitem{gan2013}
+L. Gan, U. Topcu, and S. H. Low,
+``Optimal decentralized protocol for electric vehicle charging,''
+\emph{IEEE Trans. Power Syst.}, vol. 28, no. 2, pp. 940--951, 2013.
+
+\bibitem{ma2013}
+Z. Ma, D. S. Callaway, and I. A. Hiskens,
+``Decentralized charging control of large populations of plug-in electric
+vehicles,''
+\emph{IEEE Trans. Control Syst. Technol.}, vol. 21, no. 1, pp. 67--78, 2013.
+
+\bibitem{callaway2011}
+D. S. Callaway and I. A. Hiskens,
+``Achieving controllability of electric loads,''
+\emph{Proc. IEEE}, vol. 99, no. 1, pp. 184--199, 2011.
+
+\bibitem{baran1989}
+M. E. Baran and F. F. Wu,
+``Network reconfiguration in distribution systems for loss reduction and
+load balancing,''
+\emph{IEEE Trans. Power Del.}, vol. 4, no. 2, pp. 1401--1407, 1989.
+
+\bibitem{hoke2013}
+A. Hoke, R. Butler, J. Hambrick, and B. Kroposki,
+``Steady-state analysis of maximum photovoltaic penetration levels on
+typical distribution feeders,''
+\emph{IEEE Trans. Sustain. Energy}, vol. 4, no. 2, pp. 350--357, 2013.
+
+\bibitem{huff1964}
+D. L. Huff,
+``Defining and estimating a trading area,''
+\emph{Journal of Marketing}, vol. 28, no. 3, pp. 34--38, 1964.
+
+\bibitem{frade2011}
+I. Frade, A. Ribeiro, G. Gon\c{c}alves, and A. P. Antunes,
+``Optimal location of charging stations for electric vehicles in a
+neighborhood in Lisbon, Portugal,''
+\emph{Transp. Res. Rec.}, vol. 2252, no. 1, pp. 91--98, 2011.
+
+\bibitem{hong2016}
+T. Hong and S. Fan,
+``Probabilistic electric load forecasting: A tutorial review,''
+\emph{Int. J. Forecasting}, vol. 32, no. 3, pp. 914--938, 2016.
+
+\bibitem{wang2016recency}
+P. Wang, B. Liu, and T. Hong,
+``Electric load forecasting with recency effect: A big data approach,''
+\emph{Int. J. Forecasting}, vol. 32, no. 3, pp. 585--597, 2016.
+
+\bibitem{salam2018}
+A. Salam and A. El Hibaoui,
+``Comparison of machine learning algorithms for the power consumption
+prediction: Case study of Tetouan city,''
+in \emph{Proc. 6th IEEE Int. Renewable Sustain. Energy Conf. (IRSEC)}, 2018;
+dataset: \emph{Power Consumption of Tetouan City}, UCI Machine Learning
+Repository, DOI \texttt{10.24432/C5B034}.
+
+\bibitem{chen2016}
+T. Chen and C. Guestrin,
+``XGBoost: A scalable tree boosting system,''
+in \emph{Proc. 22nd ACM SIGKDD Int. Conf. Knowledge Discovery and Data
+Mining}, 2016, pp. 785--794.
+
+\bibitem{ke2017}
+G. Ke, Q. Meng, T. Finley, T. Wang, W. Chen, W. Ma, Q. Ye, and T.-Y. Liu,
+``LightGBM: A highly efficient gradient boosting decision tree,''
+in \emph{Advances in Neural Information Processing Systems}, 2017.
+
+\bibitem{breiman2001}
+L. Breiman,
+``Random forests,''
+\emph{Machine Learning}, vol. 45, no. 1, pp. 5--32, 2001.
+
+\bibitem{hochreiter1997}
+S. Hochreiter and J. Schmidhuber,
+``Long short-term memory,''
+\emph{Neural Computation}, vol. 9, no. 8, pp. 1735--1780, 1997.
+
+\bibitem{lillicrap2016}
+T. P. Lillicrap \emph{et al.},
+``Continuous control with deep reinforcement learning,''
+in \emph{Proc. Int. Conf. Learning Representations (ICLR)}, 2016.
+
+\bibitem{mnih2015}
+V. Mnih \emph{et al.},
+``Human-level control through deep reinforcement learning,''
+\emph{Nature}, vol. 518, pp. 529--533, 2015.
+
+\bibitem{haarnoja2018}
+T. Haarnoja, A. Zhou, P. Abbeel, and S. Levine,
+``Soft actor-critic: Off-policy maximum entropy deep reinforcement learning
+with a stochastic actor,''
+in \emph{Proc. 35th Int. Conf. Machine Learning (ICML)}, 2018,
+pp. 1865--1874.
+
+\bibitem{schulman2017}
+J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov,
+``Proximal policy optimization algorithms,''
+arXiv preprint arXiv:1707.06347, 2017.
+
+\bibitem{kingma2015}
+D. P. Kingma and J. Ba,
+``Adam: A method for stochastic optimization,''
+in \emph{Proc. Int. Conf. Learning Representations (ICLR)}, 2015.
+
+\bibitem{vazquez2019}
+J. R. V\u{a}zquez-Canteli and Z. Nagy,
+``Reinforcement learning for demand response: A review of algorithms and
+modeling techniques,''
+\emph{Applied Energy}, vol. 235, pp. 1072--1089, 2019.
+
+\bibitem{qiu2020tia}
+D. Qiu, Y. Ye, D. Papadaskalopoulos, and G. Strbac,
+``A deep reinforcement learning method for pricing electric vehicles with
+discrete charging levels,''
+\emph{IEEE Trans. Ind. Appl.}, vol. 56, no. 5, pp. 5901--5912, 2020.
+
+\bibitem{liu2021access}
+D. Liu, W. Wang, L. Wang, H. Jia, and M. Shi,
+``Dynamic pricing strategy of electric vehicle aggregators based on DDPG
+reinforcement learning algorithm,''
+\emph{IEEE Access}, vol. 9, pp. 21556--21566, 2021.
+
+\bibitem{zhao2022tte}
+Z. Zhao and C. K. M. Lee,
+``Dynamic pricing for EV charging stations: A deep reinforcement learning
+approach,''
+\emph{IEEE Trans. Transp. Electrific.}, vol. 8, no. 2, pp. 2456--2468, 2022.
+
+\bibitem{ye2023}
+Y. Ye, D. Papadaskalopoulos, Q. Yuan, Y. Tang, and G. Strbac,
+``Multi-agent deep reinforcement learning for coordinated energy trading and
+flexibility services provision in local electricity markets,''
+\emph{IEEE Trans. Smart Grid}, vol. 14, no. 2, pp. 1541--1554, 2023.
+
+\bibitem{yang2024}
+X. Yang, T. Cui, H. Wang, and Y. Ye,
+``Multiagent deep reinforcement learning for electric vehicle fast charging
+station pricing game in electricity-transportation nexus,''
+\emph{IEEE Trans. Ind. Informat.}, vol. 20, no. 4, pp. 6345--6355, 2024,
+doi: 10.1109/TII.2023.3345457.
+
+\bibitem{lai2022tsg}
+S. Lai, J. Qiu, Y. Tao, and J. Zhao,
+``Pricing for electric vehicle charging stations based on the responsiveness
+of demand,''
+\emph{IEEE Trans. Smart Grid}, vol. 14, no. 1, pp. 530--544, 2023.
+
+\bibitem{cui2021tsg}
+Y. Cui, Z. Hu, and X. Duan,
+``Optimal pricing of public electric vehicle charging stations considering
+operations of coupled transportation and power systems,''
+\emph{IEEE Trans. Smart Grid}, vol. 12, no. 4, pp. 3278--3288, 2021.
+
+\bibitem{aljafari2023}
+B. Aljafari, P. R. Jeyaraj, A. C. Kathiresan, and S. B. Thanikanti,
+``Electric vehicle optimum charging-discharging scheduling with dynamic
+pricing employing multi agent deep neural network,''
+\emph{Computers and Electrical Engineering}, vol. 105, Art. no. 108555, 2023.
+
+\bibitem{yan2021tsg}
+L. Yan, X. Chen, J. Zhou, Y. Chen, and J. Wen,
+``Deep reinforcement learning for continuous electric vehicles charging
+control with dynamic user behaviors,''
+\emph{IEEE Trans. Smart Grid}, vol. 12, no. 6, pp. 5124--5134, 2021.
+
+\bibitem{paudel2023}
+D. Paudel and T. K. Das,
+``A deep reinforcement learning approach for power management of
+battery-assisted fast-charging EV hubs participating in day-ahead and
+real-time electricity markets,''
+\emph{Energy}, vol. 283, Art. no. 129097, 2023.
+
+\end{thebibliography}
+
+\end{document}
