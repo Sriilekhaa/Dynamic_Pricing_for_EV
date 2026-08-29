@@ -164,12 +164,12 @@ def fig8_par_decomposition():
     b2 = ax2.bar(x + w / 2, peak["FULL"], w, color="0.55", edgecolor="black",
                  linewidth=0.5, hatch="//", label="Peak PVB_FULL")
     for b, p in zip(b1 + b2, peak["PV"] + peak["FULL"]):
-        ax2.annotate(f"{p:.0f}", (b.get_x() + b.get_width() / 2, p),
-                     ha="center", va="bottom", fontsize=6)
+        ax2.text(b.get_x() + b.get_width() / 2, min(p - 35, 1380), f"{p:.0f}",
+                 ha="center", va="center", fontsize=5.5, color="black")
     ax2.set_ylabel("Peak total load (kW)")
     ax2.set_ylim(0, 1500)
     for i, k in enumerate(NETWORKS):
-        ax.text(i, par["FULL"][i] + 0.06,
+        ax.text(i, par["FULL"][i] + 0.09,
                 f"{par['PV'][i]:.3f}$\\rightarrow${par['FULL'][i]:.3f}",
                 ha="center", va="bottom", fontsize=6.5)
     ax.plot(x, par["PV"], "ko", ms=3)
@@ -236,11 +236,12 @@ def fig6_seasonal_results():
     rows = read("seasonal_eval_canonical.csv")
     seasons = ["Winter", "Spring", "Summer", "Autumn"]
     strats = ["PV", "PVB_OLD", "PVB_NEW", "PVB_FULL"]
-    cases = ["Case A (fixed $\\mu_i$)", "Case B (per-season $\\mu_i$)"]
+    cases = ["Case A (Fixed Jan mu)", "Case B (Per-Window Recalculated mu)"]
+    titles = [r"Case A (fixed $\mu_i$)", r"Case B (per-season $\mu_i$)"]
     fig, axs = plt.subplots(1, 2, figsize=(6.9, 2.6), sharey=True, constrained_layout=True)
     hatches = ["", "//", "xx", "."]
     grays = ["0.15", "0.45", "0.7", "0.88"]
-    for ax, case in zip(axs, cases):
+    for ax, case, title in zip(axs, cases, titles):
         data = {s: [0.0] * 4 for s in strats}
         for r in rows:
             if r["Mu_Mode"] != case:
@@ -255,7 +256,7 @@ def fig6_seasonal_results():
                           hatch=hatches[i], label=s)
         ax.set_xticks(list(x))
         ax.set_xticklabels(seasons)
-        ax.set_title(case)
+        ax.set_title(title)
         ax.grid(axis="y", alpha=0.3, linewidth=0.5)
     axs[0].set_ylabel(r"Maximum$-$minimum imbalance $\bar{I}$")
     axs[0].legend(frameon=False, ncol=2, loc="upper left")
