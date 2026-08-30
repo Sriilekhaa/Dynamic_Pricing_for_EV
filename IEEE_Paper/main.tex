@@ -29,6 +29,8 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta}
 
+\newtheorem{proposition}{Proposition}[section]
+
 \graphicspath{{figs/}}
 
 % ---- Conditional figure include: shows a boxed placeholder until the PNG exists
@@ -166,7 +168,7 @@ design~\cite{qiu2020tia,liu2021access}, charging-station revenue
 maximization~\cite{zhao2022tte}, demand-responsiveness pricing
 \cite{lai2022tsg,cui2021tsg}, vehicle-to-grid scheduling~\cite{aljafari2023},
 and, more recently, coordination across multiple market or charging
-entities~\cite{ye2023,yang2024,paudel2023}. Surveys of reinforcement learning
+entities~\cite{ye2022,yang2024,paudel2023}. Surveys of reinforcement learning
 for demand response summarize this body of work and repeatedly identify two
 cautionary patterns: most systems are single-agent and single-network, and
 when prices are demand-dependent there is a real risk of merely shifting
@@ -326,7 +328,7 @@ systems~\cite{cui2021tsg}; charging control with dynamic user behavior
 \cite{yan2021tsg}; multi-agent charge/discharge scheduling
 \cite{aljafari2023}; battery-assisted fast-charging hub management
 \cite{paudel2023}; coordinated energy trading and flexibility provision in
-local markets~\cite{ye2023}; and competitive fast-charging-station pricing
+local markets~\cite{ye2022}; and competitive fast-charging-station pricing
 games~\cite{yang2024}. None of these coordinates the tariffs of one network
 with the grid state of multiple \emph{other distribution networks} while
 retaining a closed-form demand-response baseline; the pairwise
@@ -459,7 +461,7 @@ Section~\ref{sec:framework}.
 
 \subsection{Problem Statement}
 We seek, for arbitrary $N\ge2$, pricing strategies $p_i(t)$ that minimize
-the cross-network imbalance $\bar I$ (2) while preserving per-network
+the cross-network imbalance $\bar I$ (\ref{eq:imb}) while preserving per-network
 valley-filling. Three subproblems are posed, corresponding to the three
 gaps in the base formulation.
 \begin{itemize}
@@ -630,8 +632,7 @@ with air density $\rho=1.225~\mathrm{kg/m^3}$, power coefficient
 $C_p=0.35$, $n_i$ turbines per network, cut-in
 $v_{\mathrm{cutin}}=1.5\,\mathrm{m/s}$, rated
 $v_{\mathrm{rated}}=9.0\,\mathrm{m/s}$, and cut-out
-$v_{\mathrm{cutout}}=20.0\,\mathrm{m/s}$ (values matching the codebase;
-earlier documentation that used $3/12~\mathrm{m/s}$ has been corrected).
+$v_{\mathrm{cutout}}=20.0\,\mathrm{m/s}$.
 The renewable-adjusted net load, subject to a $5\%$ baseload floor that
 prevents an unrealistic zero-load condition during peak midday generation,
 is
@@ -641,7 +642,8 @@ is
 \end{equation}
 High PV penetration is known to reshape feeder net-load and voltage
 envelopes in precisely this way~\cite{hoke2013}, motivating the
-net-load-centric reformulation.
+net-load-centric reformulation. Fig.~\ref{fig:netload} illustrates the
+conventional versus net-load profiles for the four test networks.
 
 \paperfig[\columnwidth]{fig3_net_load_profiles.png}%
 {Conventional versus renewable-adjusted net load for the four test networks
@@ -711,7 +713,8 @@ the same class of profile construction the base paper applies to its
 synthetic EV demand. Rated capacities are $1.167$, $1.0$, $1.5$, and $0.8$
 MW for the residential, commercial, industrial, and institutional networks,
 respectively. Zone centroids are placed within the city of Tetouan, giving
-the pairwise distances of Table~\ref{tab:dist}.
+the pairwise distances of Table~\ref{tab:dist}. Fig.~\ref{fig:pipeline}
+shows the end-to-end evaluation pipeline.
 
 \begin{figure}[!t]
 \centering
@@ -749,7 +752,7 @@ reported metrics (Stage 0--4 of the companion notebook).}
 \end{figure}
 
 \subsection{Evaluation Protocol}
-We report $\bar I$ (2), $\bar S$ (3), and per-network PAR
+We report $\bar I$ (\ref{eq:imb}), $\bar S$ (\ref{eq:sid}), and per-network PAR
 (\ref{eq:par}). Strategies are evaluated on the canonical $24$-hour window
 at hour $576$ of the annual series (the base paper's own test index) and,
 for the seasonal study, on three additional windows from spring
@@ -774,7 +777,8 @@ relative to PVB\_OLD; the time-averaged cross-network utilization standard
 deviation falls from $0.1152$ to $0.0901$, a $21.81\%$ reduction. The
 observed standard deviations over the five inference seeds are two orders of
 magnitude below the strategy differences, so the ranking is robust to the
-closed-form demand noise.
+closed-form demand noise. The per-hour imbalance envelope is plotted in
+Fig.~\ref{fig:imbalance}.
 
 \begin{table}[!t]
 \footnotesize
@@ -786,9 +790,9 @@ canonical 24-h window).}
 \begin{tabular}{lccc}\toprule
 Strategy & $\bar I$ & $\bar S$ & Mean PAR \\ \midrule
 PV        & $0.2729{\pm}0.0008$ & $0.1152{\pm}0.0003$ & $1.344{\pm}0.010$ \\
-PVB\_OLD  & $0.2608{\pm}0.0001$ & $0.1116{\pm}0.0001$ & $1.335{\pm}0.001$ \\
-PVB\_NEW  & $0.2544{\pm}0.0001$ & $0.1044{\pm}0.0001$ & $1.378{\pm}0.001$ \\
-PVB\_FULL & $0.2210{\pm}0.0001$ & $0.0901{\pm}0.0001$ & $1.416{\pm}0.002$ \\ \bottomrule
+PVB\_OLD  & $0.2608{\pm}0.0001$ & $0.1116{\pm}0.0000$ & $1.335{\pm}0.001$ \\
+PVB\_NEW  & $0.2544{\pm}0.0001$ & $0.1044{\pm}0.0000$ & $1.378{\pm}0.001$ \\
+PVB\_FULL & $0.2210{\pm}0.0001$ & $0.0901{\pm}0.0000$ & $1.416{\pm}0.002$ \\ \bottomrule
 \end{tabular}
 \end{table}
 
@@ -804,7 +808,8 @@ Table~\ref{tab:abl} isolates each extension's marginal contribution by
 evaluating four nested configurations. Renewable net-load integration
 (Contribution~3) accounts for nearly all of the combined gain
 ($-12.88\%$), while spatial distance decay (Contribution~2) contributes a
-modest but consistent $-0.30\%$. The asymmetry is expected at intra-city
+modest but consistent $-0.30\%$, as visualized in Fig.~\ref{fig:ablation}.
+The asymmetry is expected at intra-city
 distances of $1.16$--$7.06$~km: transit time is short relative to the
 several-hundred-kilowatt midday load removed by on-site generation.
 
@@ -851,7 +856,8 @@ Tables~\ref{tab:season} and~\ref{tab:seasonb} report the two EV-fleet
 scaling assumptions (Case~A: fixed annual $\mu_i$; Case~B: $\mu_i$
 recomputed from each season's conventional peak). The ordering
 $\mathrm{PV}>\mathrm{PVB\_OLD}>\mathrm{PVB\_NEW}>\mathrm{PVB\_FULL}$ holds
-in all eight evaluations, with reductions of $16.5$--$19.0\%$ versus PV and
+in all eight evaluations (Fig.~\ref{fig:seasonal}), with reductions of
+$16.5$--$19.0\%$ versus PV and
 $11.4$--$15.3\%$ versus PVB\_OLD across the full set.
 
 \begin{table}[!t]
@@ -899,7 +905,8 @@ were retrained from scratch over the four training seeds
 $\{42,7,123,2025\}$. Table~\ref{tab:ddpg} reports that learned tariffs show
 $6.7$--$13.0\%$ relative standard deviation across training runs while
 consistently taxing morning/evening peak hours and discounting midday hours
-that coincide with peak solar availability in every run.
+that coincide with peak solar availability in every run
+(Fig.~\ref{fig:ddpg}).
 
 \begin{table}[!t]
 \footnotesize
@@ -923,11 +930,12 @@ tariff.}%
 {fig:ddpg}
 
 \subsection{Peak-to-Average Ratio Decomposition}\label{sec:par}
-PAR increases slightly under PVB\_FULL despite falling peaks. Table
-\ref{tab:par} decomposes the cause per network: absolute peak demand falls
+PAR increases slightly under PVB\_FULL despite falling peaks
+(Fig.~\ref{fig:par}). Table~\ref{tab:par} decomposes the cause per network:
+absolute peak demand falls
 in every network, but midday solar generation depresses the daily mean load
 (the PAR denominator) by $5.7$--$10.8\%$, more than it reduces the
-non-solar residual peak (the numerator, cut by only $0.3$--$9.3\%$).
+non-solar residual peak (the numerator, cut by only $0.4$--$9.3\%$).
 Because the denominator falls faster than the numerator, PAR rises while
 absolute peaks and cross-network imbalance improve--consistent with
 distribution grids carrying distributed photovoltaics without stationary
@@ -949,15 +957,17 @@ Institutional & 787.8\,kW & 714.5\,kW & 1.654$\to$1.673 \\ \bottomrule
 \end{table}
 
 \paperfig[\columnwidth]{fig8_par_decomposition.png}%
-{Per-network peak total load (kW, bars) and peak-to-average ratio
-(markers, right axis) under PV vs.\ PVB\_FULL, matching
-Table~\ref{tab:par}; PAR values use the canonical seed-42 evaluation.}%
-{fig:par}
+ {Per-network peak total load (kW) under PV vs.\ PVB\_FULL, with the
+ resulting peak-to-average ratio $D_{\max}/D_{\rm mean}$ in the lower
+ panel, matching Table~\ref{tab:par}; PAR values use the canonical
+ seed-42 evaluation.}%
+ {fig:par}
 
 \subsection{An Inherited Structural Limitation}\label{sec:inherited}
 Across all four networks the PVB/PVB\_FULL EV-demand peak is reduced
 relative to the uncoordinated EV baseline by a nearly identical margin
-($\approx44.5\%$ with respect to the unbalanced EV peak), despite the
+($\approx44.5\%$ with respect to the unbalanced EV peak;
+Fig.~\ref{fig:uniformity}), despite the
 networks' distinct diurnal shapes. Reproducing the base paper's own
 two-network computation from its data and code gives the same uniformity:
 the EV peak under PVB is a near-constant fraction ($\approx0.83$, within one
@@ -1040,8 +1050,11 @@ ensembles across a full annual cycle.
 
 % ======================================================================
 \section*{Acknowledgment}
-Placeholder: add the AI-assistance disclosure and funding statements required
-by the target venue's author guidelines before submission.
+The authors acknowledge the use of AI-assisted coding tools during the
+implementation and verification stages of this work. All mathematical
+formulations, experimental design decisions, and result interpretations
+were made by the authors. The Tetouan smart-grid dataset was obtained from
+the UCI Machine Learning Repository~\cite{salam2018}.
 
 % ======================================================================
 \appendix
@@ -1262,13 +1275,13 @@ reinforcement learning algorithm,''
 Z. Zhao and C. K. M. Lee,
 ``Dynamic pricing for EV charging stations: A deep reinforcement learning
 approach,''
-\emph{IEEE Trans. Transp. Electrific.}, vol. 8, no. 2, pp. 2456--2468, 2022.
+\emph{IEEE Trans. Transp. Electrific.}, vol. 8, no. 2, pp. 2456--2468, 2021.
 
-\bibitem{ye2023}
+\bibitem{ye2022}
 Y. Ye, D. Papadaskalopoulos, Q. Yuan, Y. Tang, and G. Strbac,
 ``Multi-agent deep reinforcement learning for coordinated energy trading and
 flexibility services provision in local electricity markets,''
-\emph{IEEE Trans. Smart Grid}, vol. 14, no. 2, pp. 1541--1554, 2023.
+\emph{IEEE Trans. Smart Grid}, vol. 14, no. 2, pp. 1541--1554, 2022.
 
 \bibitem{yang2024}
 X. Yang, T. Cui, H. Wang, and Y. Ye,

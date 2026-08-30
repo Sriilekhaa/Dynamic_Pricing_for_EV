@@ -145,7 +145,6 @@ def fig4_imbalance_envelope():
 
 def fig8_par_decomposition():
     totals = _eval_arrays()
-    fig, ax = plt.subplots(figsize=(3.5, 2.2), constrained_layout=True)
     par = {"PV": [], "FULL": []}
     peak = {"PV": [], "FULL": []}
     for k in NETWORKS:
@@ -156,33 +155,40 @@ def fig8_par_decomposition():
         peak["PV"].append(t_pv.max() / 1000.0)
         peak["FULL"].append(t_fl.max() / 1000.0)
 
-    ax2 = ax.twinx()
     x = np.arange(4)
     w = 0.32
-    b1 = ax2.bar(x - w / 2, peak["PV"], w, color="0.85", edgecolor="black",
-                 linewidth=0.5, label="Peak PV")
-    b2 = ax2.bar(x + w / 2, peak["FULL"], w, color="0.55", edgecolor="black",
-                 linewidth=0.5, hatch="//", label="Peak PVB_FULL")
-    for b, p in zip(b1 + b2, peak["PV"] + peak["FULL"]):
-        ax2.text(b.get_x() + b.get_width() / 2, min(p - 35, 1380), f"{p:.0f}",
-                 ha="center", va="center", fontsize=5.5, color="black")
-    ax2.set_ylabel("Peak total load (kW)")
-    ax2.set_ylim(0, 1500)
-    for i, k in enumerate(NETWORKS):
-        ax.text(i, par["FULL"][i] + 0.09,
-                f"{par['PV'][i]:.3f}$\\rightarrow${par['FULL'][i]:.3f}",
-                ha="center", va="bottom", fontsize=6.5)
-    ax.plot(x, par["PV"], "ko", ms=3)
-    ax.plot(x, par["FULL"], "ks", ms=3)
-    ax.set_xticks(x)
-    ax.set_xticklabels(NETS)
-    ax.set_ylabel(r"Peak$-$to$-$average ratio $D_{\max}/D_{\rm mean}$")
-    ax.set_ylim(1.0, 1.85)
-    ax.grid(alpha=0.3)
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h2 + h1, l2 + l1, frameon=False, ncol=2, loc="upper left",
-              fontsize=6)
+    fig, (ax, axt) = plt.subplots(2, 1, figsize=(3.5, 2.7), sharex=True,
+                                  constrained_layout=True)
+
+    b1 = ax.bar(x - w / 2, peak["PV"], w, color="0.85", edgecolor="black",
+                linewidth=0.5, label="Peak PV")
+    b2 = ax.bar(x + w / 2, peak["FULL"], w, color="0.55", edgecolor="black",
+                linewidth=0.5, hatch="//", label="Peak PVB_FULL")
+    for i, (pv, fl) in enumerate(zip(peak["PV"], peak["FULL"])):
+        ax.text(x[i] - w / 2, pv + 8, f"{pv:.0f}",
+                ha="center", va="bottom", fontsize=5.0)
+        ax.text(x[i] + w / 2, fl + 34, f"{fl:.0f}",
+                ha="center", va="bottom", fontsize=5.0)
+    ytop = max(max(peak["PV"]), max(peak["FULL"])) * 1.16
+    ax.set_ylim(0, ytop)
+    ax.grid(axis="y", alpha=0.3, linewidth=0.5)
+    ax.legend(frameon=False, ncol=2, loc="upper left", fontsize=6)
+    ax.set_ylabel("Peak total load (kW)")
+
+    axt.plot(x, par["PV"], "-o", color="black", lw=0.8, ms=3,
+             label="PAR under PV")
+    axt.plot(x, par["FULL"], "--s", color="black", lw=0.8, ms=3,
+             label="PAR under PVB_FULL")
+    for i in range(4):
+        axt.annotate(f"{par['FULL'][i]:.3f}", xy=(x[i], par["FULL"][i]),
+                     xytext=(0, -7), textcoords="offset points",
+                     ha="center", va="top", fontsize=5.0)
+    axt.set_xticks(x)
+    axt.set_xticklabels(NETS)
+    axt.set_ylim(1.0, 1.85)
+    axt.grid(axis="y", alpha=0.3, linewidth=0.5)
+    axt.legend(frameon=False, ncol=2, loc="upper left", fontsize=6)
+    axt.set_ylabel(r"PAR  $D_{\max}(t)/D_{\rm mean}$")
     fig.savefig(os.path.join(OUT, "fig8_par_decomposition.png"))
     plt.close(fig)
 
